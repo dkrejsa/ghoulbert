@@ -1,0 +1,1329 @@
+
+kind (wff)
+
+var (wff ph ps ch th ta)
+
+term (wff (-> wff wff))
+term (wff (-. wff))
+
+thm (drop () ((1 ph)) () ())
+thm (swap () ((1 ph) (2 ps)) (ps ph) (2 1))
+thm (dup () ((1 ph)) (ph ph) (1 1))
+thm (under2 () ((1 ph) (2 ps) (3 ch)) (ch ph ps) (3 1 2))
+
+stmt (ax-1 () () ((-> ph (-> ps ph))))
+stmt (ax-2 () () ((-> (-> ph (-> ps ch)) (-> (-> ph ps) (-> ph ch)))))
+stmt (ax-3 () () ((-> (-> (-. ph) (-. ps)) (-> ps ph))))
+
+# Modus Ponens
+stmt (ax-mp () (ph (-> ph ps)) (ps))
+
+equiv (wff_equiv () ((-> ph ps) (-> ps ph)) (ph ps))
+
+thm (a1i () ((1 ph)) ((-> ps ph)) (1 ph ps ax-1 ax-mp))
+thm (a2i () ((1 (-> ph (-> ps ch)))) ((-> (-> ph ps) (-> ph ch)))
+     (1 ph ps ch ax-2 ax-mp))
+thm (imx1 () ((1 (-> ph ps))) ((-> (-> ch ph) (-> ch ps)))
+      (1 ch a1i a2i))
+thm (syl () ((1 (-> ph ps)) (2 (-> ps ch))) ((-> ph ch))
+     (1 2 ph imx1 ax-mp))
+thm (imph2i () ((1 (-> (-> ph ps) ch))) ((-> ps ch))
+     (ps ph ax-1 1 syl))
+thm (com12 () ((1 (-> ph (-> ps ch)))) ((-> ps (-> ph ch)))
+      (1 a2i imph2i))
+thm (sylt () () ((-> (-> ph ps) (-> (-> ps ch) (-> ph ch))))
+     (ph ps ch ax-2 imph2i com12))
+thm (imx2 () ((1 (-> ph ps))) ((-> (-> ps ch) (-> ph ch)))
+     (1 ph ps ch sylt ax-mp))
+thm (h1syl () ((1 (-> ph (-> ps ch))) (2 (-> ch th))) ((-> ph (-> ps th)))
+     (1 2 ps imx1 syl))
+thm (h2syl () ((1 (-> ph ps)) (2 (-> ch (-> ps th)))) ((-> ch (-> ph th)))
+     (1 2 com12 syl com12))
+thm (com12t () () ((-> (-> ph (-> ps ch)) (-> ps (-> ph ch))))
+     (ph ps ch ax-2 com12 imph2i com12))
+thm (id () () ((-> ph ph))
+     (ph ps ax-1 ph (-> ps ph) ax-1 a2i ax-mp))
+thm (impsimpi () ((1 (-> ph (-> ph ps)))) ((-> ph ps))
+     (ph id 1 a2i ax-mp))
+thm (impsimp () () ((-> (-> ph (-> ph ps)) (-> ph ps)))
+     (ph id
+        ph ph ps ax-2
+      com12 ax-mp))
+thm (bridge () ((1 (-> ph ps)) (2 (-> ch th))) ((-> (-> ps ch) (-> ph th)))
+     (1 2 ps imx1 h2syl))
+thm (hamp () ((1 ph) (2 (-> ps (-> ph ch)))) ((-> ps ch))
+     (1 2 com12 ax-mp))
+thm (ampt () () ((-> ph (-> (-> ph ps) ps)))
+     ((-> ph ps) id com12))
+thm (com23 () ((1 (-> ph (-> ps (-> ch th))))) ((-> ph (-> ch (-> ps th))))
+     (1 ps ch th com12t ph imx1 ax-mp))
+
+thm (com34 () ((1 (-> ph (-> ps (-> ch (-> th ta))))))
+       ((-> ph (-> ps (-> th (-> ch ta)))))
+     (1 ch th ta com12t ps imx1 ph imx1 ax-mp))
+
+thm (3imx2 () ((1 (-> ph (-> ps ch)))) ((-> (-> ch ta) (-> ph (-> ps ta))))
+     (1 
+        (-> ch ta) id com12
+      h1syl com23 com12
+     ))
+
+thm (a3i () ((1 (-> (-. ph) (-. ps)))) ((-> ps ph))
+     (1 ph ps ax-3 ax-mp))
+thm (a1n () () ((-> (-. ph) (-> ph ps)))
+     (ps ph ax-3 imph2i))
+thm (a1ni () ((1 (-. ph))) ((-> ph ps))
+     (1 ph ps a1n ax-mp))
+thm (a1nr () () ((-> ph (-> (-. ph) ps)))
+     (ph ps a1n com12))
+thm (a1nri () ((1 ph)) ((-> (-. ph) ps))
+     (1 ph ps a1nr ax-mp))
+thm (imph1i () ((1 (-> (-> ph ps) ch))) ((-> (-. ph) ch))
+     (ph ps a1n 1 syl))
+thm (a3d () () ((-> (-> (-. (-. ph)) (-. (-. ps))) (-> ph ps)))
+     ((-. ph) (-. ps) ax-3 ps ph ax-3 syl))
+thm (dn () () ((-> (-. (-. ph)) ph))
+     (ps id (-> ps ps) ph a3d imph2i hamp))
+thm (dnr () () ((-> ph (-. (-. ph))))
+     ((-. ph) dn a3i))
+thm (dni () ((1 (-. (-. ph)))) (ph)
+     (1 ph dn ax-mp))
+thm (hdni () ((1 (-> ph (-. (-. ps))))) ((-> ph ps))
+     (1 ps dn syl))
+thm (dnri () ((1 ph)) ((-. (-. ph)))
+     (1 ph dnr ax-mp))
+thm (hdnri () ((1 (-> ph ps))) ((-> ph (-. (-. ps))))
+     (1 ps dnr syl))
+thm (a3n1 () () ((-> (-> (-. ph) ps) (-> (-. ps) ph)))
+     (ps dnr (-. ph) imx1 ph (-. ps) ax-3 syl))
+thm (a3n2 () () ((-> (-> ph (-. ps)) (-> ps (-. ph))))
+     (ph dn (-. ps) imx2 (-. ph) ps ax-3 syl))
+thm (a3r () () ((-> (-> ph ps) (-> (-. ps) (-. ph))))
+     (ps dnr ph imx1 ph (-. ps) a3n2 syl))
+thm (a3n1i () ((1 (-> (-. ph) ps))) ((-> (-. ps) ph))
+     (1 ph ps a3n1 ax-mp))
+thm (a3n2i () ((1 (-> ph (-. ps)))) ((-> ps (-. ph)))
+     (1 ph ps a3n2 ax-mp))
+thm (a3ri () ((1 (-> ph ps))) ((-> (-. ps) (-. ph)))
+     (1 ph ps a3r ax-mp))
+thm (ha3i () ((1 (-> ph (-> (-. ps) (-. ch))))) ((-> ph (-> ch ps)))
+     (1 ps ch ax-3 syl))
+thm (ha3n1i () ((1 (-> ph (-> (-. ps) ch)))) ((-> ph (-> (-. ch) ps)))
+     (1 ps ch a3n1 syl))
+thm (ha3n2i () ((1 (-> ph (-> ps (-. ch))))) ((-> ph (-> ch (-. ps))))
+     (1 ps ch a3n2 syl))
+thm (ha3ri () ((1 (-> ph (-> ps ch)))) ((-> ph (-> (-. ch) (-. ps))))
+     (1 ps ch a3r syl))
+thm (mt () ((1 (-> ph ps)) (2 (-. ps))) ((-. ph))
+     (2 1 a3ri ax-mp))
+
+thm (nimp1 () () ((-> (-. (-> ph ps)) ph))
+     (ph ps a1n a3n1i))
+thm (nimp2 () () ((-> (-. (-> ph ps)) (-. ps)))
+     (ps ph ax-1 a3ri))
+thm (nimp1i () ((1 (-. (-> ph ps)))) (ph)
+     (1 ph ps nimp1 ax-mp))
+thm (nimp2i () ((1 (-. (-> ph ps)))) ((-. ps))
+     (1 ph ps nimp2 ax-mp))
+thm (nimp () () ((-> ph (-> (-. ps) (-. (-> ph ps)))))
+     (ph ps ampt ha3ri))
+thm (nimpi () ((1 ph) (2 (-. ps))) ((-. (-> ph ps)))
+     (2 1 ph ps nimp ax-mp ax-mp))
+thm (hnimpi () ((1 (-> ph ps)) (2 (-> ph (-. ch)))) ((-> ph (-. (-> ps ch))))
+     (2 1 ps ch nimp syl h2syl impsimpi))
+
+def ((/\ ph ps) (-. (-> ph (-. ps))))
+
+thm (and1 () () ((-> (/\ ph ps) ph))
+     (ph (-. ps) nimp1))
+thm (and2 () () ((-> (/\ ph ps) ps))
+     (ph (-. ps) nimp2 hdni))
+thm (and () () ((-> ph (-> ps (/\ ph ps))))
+     (ps dnr ph (-. ps) nimp h2syl))
+thm (and1i () ((1 (/\ ph ps))) (ph)
+     (1 ph ps and1 ax-mp))
+thm (and2i () ((1 (/\ ph ps))) (ps)
+     (1 ph ps and2 ax-mp))
+thm (andi () ((1 ph) (2 ps)) ((/\ ph ps))
+     (2 1 ph ps and ax-mp ax-mp))
+thm (handi () ((1 (-> ph ps)) (2 (-> ph ch))) ((-> ph (/\ ps ch)))
+     (2 1 ps ch and syl h2syl impsimpi))
+thm (join () ((1 (-> ph ps)) (2 (-> ch th))) ((-> (/\ ph ch) (/\ ps th)))
+     (ph ch and1 1 syl
+      ph ch and2 2 syl
+      handi))
+
+thm (both () ((1 (/\ ph ps))) (ph ps)
+     (1 and1i 1 and2i))
+thm (andcomi () ((1 (/\ ph ps))) ((/\ ps ph))
+     (1 both swap andi))
+thm (andid () () ((-> ph (/\ ph ph)))
+     (ph id dup handi))
+thm (andcom () () ((-> (/\ ph ps) (/\ ps ph)))
+     (ph ps and2
+      ph ps and1
+      handi))
+thm (andassoc1 () () ((-> (/\ ph (/\ ps ch)) (/\ (/\ ph ps) ch)))
+     (ph (/\ ps ch) and1
+      ph (/\ ps ch) and2 ps ch and1 syl
+      handi
+      ph (/\ ps ch) and2 ps ch and2 syl
+      handi))
+thm (andassoc2 () () ((-> (/\ (/\ ph ps) ch) (/\ ph (/\ ps ch))))
+     ((/\ ph ps) ch and1 ph ps and1 syl
+      (/\ ph ps) ch and1 ph ps and2 syl
+      (/\ ph ps) ch and2
+      handi handi))
+thm (andassoc1i () ((1 (/\ ph (/\ ps ch)))) ((/\ (/\ ph ps) ch))
+     (1 both both under2 andi swap andi))
+thm (andassoc2i () ((1 (/\ (/\ ph ps) ch))) ((/\ ph (/\ ps ch)))
+     (1 and1i both 1 and2i andi andi))
+
+thm (andhypi () ((1 (-> ph (-> ps ch)))) ((-> (/\ ps ph) ch))
+     (ps ph and1 ps ph and2 1 syl h2syl impsimpi))
+thm (hypandi () ((1 (-> (/\ ps ph) ch))) ((-> ph (-> ps ch)))
+     (ps ph and com12 1 h1syl))
+
+thm (df-and-f () () ((-> (/\ ph ps) (-. (-> ph (-. ps)))))
+     ((-. (-> ph (-. ps))) id))
+
+thm (df-and-r () () ((-> (-. (-> ph (-. ps))) (/\ ph ps)))
+     ((-. (-> ph (-. ps))) id))
+
+thm (npipip () () ((-> (-> (-. ph) ph) ph))
+     ((-. ph) ph nimp impsimpi a3i))
+thm (cases () () ((-> (-> ph ps) (-> (-> (-. ph) ps) ps)))
+     (ph ps a3r (-. ps) (-. ph) ps sylt syl
+      ps npipip h1syl))
+thm (casesi () ((1 (-> ph ps)) (2 (-> (-. ph) ps))) (ps)
+     (2 1 ph ps cases ax-mp ax-mp))
+
+thm (imphypi () ((1 (-> ps ch)) (2 (-> (-. ph) ch))) ((-> (-> ph ps) ch))
+     (1 a3ri 
+        2 a3n1i 
+          ph ps nimp
+        syl
+      h2syl impsimpi a3i))
+
+def ((\/ ph ps) (-> (-. ph) ps))
+
+thm (or1 () () ((-> ph (\/ ph ps)))
+     (ph ps a1nr))
+thm (or2 () () ((-> ps (\/ ph ps)))
+      (ps (-. ph) ax-1))
+thm (or () () ((-> (-> ph ch) (-> (-> ps ch) (-> (\/ ph ps) ch))))
+     (ph ch ampt (-> (-. ph) ps) a1i com12 com23 (-> ps ch) a1i com12 com23
+      (-. ph) ps ch sylt com12 com23 com12 (-> ph ch) a1i com12
+      casesi))
+thm (orcom () () ((-> (\/ ph ps) (\/ ps ph)))
+     (ph ps a3n1))
+thm (or1i () ((1 ph)) ((\/ ph ps))
+     (1 ph ps or1 ax-mp))
+thm (or2i () ((1 ps)) ((\/ ph ps))
+     (1 ps ph or2 ax-mp))
+thm (ori () ((1 (-> ph ch)) (2 (-> ps ch))) ((-> (\/ ph ps) ch))
+     (2 1 ph ch ps or ax-mp ax-mp))
+thm (orcomi () ((1 (\/ ph ps))) ((\/ ps ph))
+     (1 ph ps orcom ax-mp))
+
+thm (df-or-f () () ((-> (\/ ph ps) (-> (-. ph) ps)))
+     ((-> (-. ph) ps) id))
+thm (df-or-r () () ((-> (-> (-. ph) ps) (\/ ph ps)))
+     ((-> (-. ph) ps) id))
+thm (df-or-fi () ((1 (\/ ph ps))) ((-> (-. ph) ps))
+     (1 ph ps df-or-f ax-mp))
+thm (df-or-ri () ((1 (-> (-. ph) ps))) ((\/ ph ps))
+     (1 ph ps df-or-r ax-mp))
+
+thm (orelim1 () ((1 (\/ ph ps)) (2 (-. ph))) (ps)
+     (2 1 df-or-fi ax-mp))
+
+thm (orelim2 () ((1 (\/ ph ps)) (2 (-. ps))) (ph)
+     (1 orcomi 2 orelim1))
+
+def ((true) (-> ph ph) 
+     (ps id (-> ph ph) a1i
+      ph id (-> ps ps) a1i
+      wff_equiv))
+
+def ((false) (-. (true)))
+
+thm (truth () () ((true))
+     (ph id))
+thm (falsity () () ((-. (false)))
+     (truth dnri))
+thm (iftrue () ((1 (-> (true) ph))) (ph)
+     (truth 1 ax-mp))
+
+def ((<-> ph ps) (/\ (-> ph ps) (-> ps ph)))
+
+thm (bimp1 () () ((-> (<-> ph ps) (-> ph ps)))
+     ((-> ph ps) (-> ps ph) and1))
+thm (bimp2 () () ((-> (<-> ph ps) (-> ps ph)))
+     ((-> ph ps) (-> ps ph) and2))
+thm (bimp1i () ((1 (<-> ph ps))) ((-> ph ps))
+     (1 ph ps bimp1 ax-mp))
+thm (bimp2i () ((1 (<-> ph ps))) ((-> ps ph))
+     (1 ph ps bimp2 ax-mp))
+thm (bimpi () ((1 (<-> ph ps))) ((-> ph ps) (-> ps ph))
+     (1 bimp1i 1 bimp2i))
+thm (bicons () () ((-> (-> ph ps) (-> (-> ps ph) (<-> ph ps))))
+     ((-> ph ps) (-> ps ph) and))
+thm (biconsi () ((1 (-> ph ps)) (2 (-> ps ph))) ((<-> ph ps))
+     (1 2 andi))
+
+thm (hbimp1i () ((1 (-> ph (<-> ps ch)))) ((-> ph (-> ps ch)))
+     (1 ps ch bimp1 syl))
+
+thm (hbimp2i () ((1 (-> ph (<-> ps ch)))) ((-> ph (-> ch ps)))
+     (1 ps ch bimp2 syl))
+
+thm (bisyl () ((1 (<-> ph ps)) (2 (<-> ps ch))) ((<-> ph ch))
+     (1 bimp1i 2 bimp1i syl
+      2 bimp2i 1 bimp2i syl
+      biconsi))
+
+thm (bisym1 () () ((-> (<-> ph ps) (<-> ps ph)))
+     (ph ps bimp2
+      ph ps bimp1
+      handi))
+
+thm (bisym () () ((<-> (<-> ph ps) (<-> ps ph)))
+     (ph ps bisym1
+      ps ph bisym1
+      biconsi))
+
+thm (bisymi () ((1 (<-> ph ps))) ((<-> ps ph))
+     (1 ph ps bisym1 ax-mp))
+
+thm (hbisymi () ((1 (-> ph (<-> ps ch)))) ((-> ph (<-> ch ps)))
+     (1 ps ch bisym1 syl))
+
+thm (bin-f () () ((-> (<-> ph ps) (<-> (-. ph) (-. ps))))
+     (ph ps bimp2 ha3ri
+      ph ps bimp1 ha3ri
+      handi))
+
+thm (bin-r () () ((-> (<-> (-. ph) (-. ps)) (<-> ph ps)))
+     ((-. ph) (-. ps) bimp2 ha3i
+      (-. ph) (-. ps) bimp1 ha3i
+      handi))
+
+thm (bin () () ((<-> (<-> ph ps) (<-> (-. ph) (-. ps))))
+     (ph ps bin-f
+      ph ps bin-r
+      biconsi))
+
+thm (bimp () ((1 ph) (2 (<-> ph ps))) (ps)
+     (1 2 bimp1i ax-mp))
+
+thm (bini () ((1 (<-> ph ps))) ((<-> (-. ph) (-. ps)))
+     (1 ph ps bin bimp))
+
+thm (binri () ((1 (<-> (-. ph) (-. ps)))) ((<-> ph ps))
+     (1 ph ps bin-r ax-mp))
+
+thm (bimt () ((1 (-. ph)) (2 (<-> ph ps))) ((-. ps))
+     (1 2 bini bimp))
+
+thm (bin1-f () () ((-> (<-> (-. ph) ps) (<-> (-. ps) ph)))
+     ((-. ph) ps bimp1 ha3n1i
+      (-. ph) ps bimp2 ha3n2i
+      handi))
+thm (bin1 () () ((<-> (<-> (-. ph) ps) (<-> (-. ps) ph)))
+     (ph ps bin1-f
+      ps ph bin1-f
+      biconsi))
+thm (bin1i () ((1 (<-> (-. ph) ps))) ((<-> (-. ps) ph))
+     (1 ph ps bin1 bimp))
+thm (bin2i () ((1 (<-> ph (-. ps)))) ((<-> ps (-. ph)))
+     (1 bisymi bin1i bisymi))
+
+thm (bin2 () () ((<-> (<-> ph (-. ps)) (<-> ps (-. ph))))
+     (ph (-. ps) bisym
+        ps ph bin1
+          (-. ph) ps bisym
+        bisyl
+      bisyl))
+
+thm (biid () () ((<-> ph ph))
+     (ph id dup biconsi))
+
+thm (df-and () () ((<-> (/\ ph ps) (-. (-> ph (-. ps)))))
+     (ph ps df-and-f
+      ph ps df-and-r
+      biconsi))
+
+thm (df-or () () ((<-> (\/ ph ps) (-> (-. ph) ps)))
+     (ph ps df-or-f
+      ph ps df-or-r
+      biconsi))
+
+thm (dneq () () ((<-> ph (-. (-. ph))))
+     (ph dnr
+      ph dn
+      biconsi))
+
+thm (eq3 () () ((<-> (-> (-. ph) (-. ps)) (-> ps ph)))
+     (ph ps ax-3
+        ps ph a3r
+      biconsi))
+thm (eq3n1 () () ((<-> (-> (-. ph) ps) (-> (-. ps) ph)))
+     (ph ps a3n1
+        ps ph a3n1
+      biconsi))
+thm (eq3n2 () () ((<-> (-> ph (-. ps)) (-> ps (-. ph))))
+     (ph ps a3n2
+       ps ph a3n2
+      biconsi))
+
+thm (bixi1 () ((1 (<-> ph ps))) ((<-> (-> ph ch) (-> ps ch)))
+     (1 bimp2i ch imx2
+      1 bimp1i ch imx2
+      biconsi))
+
+thm (bixi2 () ((1 (<-> ph ps))) ((<-> (-> ch ph) (-> ch ps)))
+     (1 bimp1i ch imx1
+      1 bimp2i ch imx1
+      biconsi))
+
+thm (bixi () ((1 (<-> ph ps)) (2 (<-> ch th))) ((<-> (-> ph ch) (-> ps th)))
+     (1 ch bixi1
+        2 ps bixi2
+      bisyl))
+
+thm (dmorg~^ () () ((<-> (-. (/\ ph ps)) (\/ (-. ph) (-. ps))))
+     (ph ps df-and bin2i bisymi
+        ph dneq (-. ps) bixi1
+      bisyl))
+
+thm (bisylr2 () ((1 (<-> ph ps)) (2 (<-> ch ps))) ((<-> ph ch))
+     (1 2 bisymi bisyl))
+
+thm (dmorg~v () () ((<-> (-. (\/ ph ps)) (/\ (-. ph) (-. ps))))
+     (ps dneq (-. ph) bixi2 bini
+        (-. ph) (-. ps) df-and
+      bisylr2))
+
+thm (bisylr1 () ((1 (<-> ph ps)) (2 (<-> ph ch))) ((<-> ps ch))
+     (1 bisymi 2 bisyl))
+
+thm (push () ((1 (-> ph ps))) ((-> (/\ ch ph) (/\ ch ps)))
+     (ch ph and1
+      ch ph and2 1 syl
+      handi))
+
+thm (pushr () ((1 (-> ph ps))) ((-> (/\ ph ch) (/\ ps ch)))
+     (ph ch and1 1 syl
+      ph ch and2
+      handi))
+
+thm (also () ((1 (-> ph ps)) (2 ch)) ((-> ph (/\ ch ps)))
+     (2 ph a1i 1 handi))
+
+thm (usehyp () ((1 (-> ph ps))) ((-> ph (/\ ph ps)))
+      (ph id 1 handi))
+
+thm (usehypt () () ((-> (-> ph ps) (-> ph (/\ ph ps))))
+     (ph ps and a2i))
+
+thm (bixa1 () ((1 (<-> ph ps))) ((<-> (/\ ph ch) (/\ ps ch)))
+     (1 bimp1i ch pushr
+      1 bimp2i ch pushr
+      biconsi))
+
+thm (bixa2 () ((1 (<-> ph ps))) ((<-> (/\ ch ph) (/\ ch ps)))
+     (1 bimp1i ch push
+      1 bimp2i ch push
+      biconsi))
+
+thm (bixa () ((1 (<-> ph ps)) (2 (<-> ch th))) ((<-> (/\ ph ch) (/\ ps th)))
+     (1 ch bixa1
+      2 ps bixa2
+      bisyl))
+
+thm (eqorcom () () ((<-> (\/ ph ps) (\/ ps ph)))
+     (ph ps orcom
+      ps ph orcom
+      biconsi))
+
+thm (bixo1 () ((1 (<-> ph ps))) ((<-> (\/ ph ch) (\/ ps ch)))
+     (1 bimp1i ps ch or1 syl
+        ch ps or2
+      ori
+      1 bimp2i ph ch or1 syl
+        ch ph or2
+      ori
+      biconsi))
+
+thm (bixo2 () ((1 (<-> ph ps))) ((<-> (\/ ch ph) (\/ ch ps)))
+     (ch ph eqorcom
+        1 ch bixo1
+          ps ch eqorcom
+        bisyl
+      bisyl))
+
+thm (bixo () ((1 (<-> ph ps)) (2 (<-> ch th))) ((<-> (\/ ph ch) (\/ ps th)))
+     (1 ch bixo1
+      2 ps bixo2
+      bisyl))
+
+#################
+# Predicate calculus
+
+kind (set)
+kind (class)
+subkind (set class)
+
+term (wff (A. set wff))
+
+var (set x y z u v w)
+var (class A B C D)
+
+stmt (ax-gen () (ph) ((A. x ph)))
+
+stmt (ax-5 () () ((-> (A. x (-> ph ps)) (-> (A. x ph) (A. x ps)))))
+stmt (ax-6 () () ((-> (-. (A. x ph)) (A. x (-. (A. x ph))))))
+stmt (ax-7 () () ((-> (A. x (A. y ph)) (A. y (A. x ph)))))
+
+stmt (ax-17 ((x ph)) () ((-> ph (A. x ph))))
+
+thm (a5i () ((1 (A. x (-> ph ps)))) ((-> (A. x ph) (A. x ps)))
+     (1 x ph ps ax-5 ax-mp))
+thm (ha5i () ((1 (-> ph (A. x (-> ps ch))))) ((-> ph (-> (A. x ps) (A. x ch))))
+     (1 x ps ch ax-5 syl))
+thm (a5gi () ((1 (-> ph ps))) ((-> (A. x ph) (A. x ps)))
+     (1 x ax-gen a5i))
+thm (a7i () ((1 (A. x (A. y ph)))) ((A. y (A. x ph)))
+     (1 x y ph ax-7 ax-mp))
+
+thm (ax7eq () () ((<-> (A. x (A. y ph)) (A. y (A. x ph))))
+     (x y ph ax-7
+      y x ph ax-7
+      biconsi))
+
+thm (eqax () ((1 (<-> ph ps))) ((<-> (A. x ph) (A. x ps)))
+     (1 bimp1i x a5gi
+      1 bimp2i x a5gi
+      biconsi))
+
+def ((E. x ph) (-. (A. x (-. ph))))
+
+thm (df-ex () () ((<-> (E. x ph) (-. (A. x (-. ph)))))
+     ((-. (A. x (-. ph))) biid))
+
+thm (nex () () ((<-> (-. (E. x ph)) (A. x (-. ph))))
+     (x ph df-ex bin2i bisymi))
+
+thm (nax () () ((<-> (-. (A. x ph)) (E. x (-. ph))))
+     (x (-. ph) nex
+      ph dneq x eqax bisymi
+      bisyl
+      bin1i
+      ))
+
+thm (axex1 () () ((-> (E. x ph) (A. x (E. x ph))))
+     (x (-. ph) ax-6))
+
+thm (exax1 () () ((-> (E. x (A. x ph)) (A. x ph)))
+     (x ph ax-6 a3n1i))
+
+thm (ex5 () () ((-> (A. x (-> ph ps)) (-> (E. x ph) (E. x ps))))
+     (ph ps a3r x a5gi
+       x (-. ps) (-. ph) ax-5
+      syl ha3ri))
+thm (e5i () ((1 (A. x (-> ph ps)))) ((-> (E. x ph) (E. x ps)))
+     (1 x ph ps ex5 ax-mp))
+thm (he5i () ((1 (-> ph (A. x (-> ps ch))))) ((-> ph (-> (E. x ps) (E. x ch))))
+     (1 x ps ch ex5 syl))
+
+thm (e5gi () ((1 (-> ph ps))) ((-> (E. x ph) (E. x ps)))
+     (1 x ax-gen e5i))
+
+thm (eqex () ((1 (<-> ph ps))) ((<-> (E. x ph) (E. x ps)))
+     (1 bimp1i x e5gi
+      1 bimp2i x e5gi
+      biconsi))
+
+thm (ex17 ((x ph)) () ((-> (E. x ph) ph))
+     ((-. ph) x ax-17 a3n1i))
+
+thm (e17i ((x ph)) ((1 (E. x ph))) (ph)
+     (1 x ph ex17 ax-mp))
+thm (he17i ((x ph)) ((1 (-> ps (E. x ph)))) ((-> ps ph))
+     (1 x ph ex17 syl))
+
+thm (ea17 ((x ph)) () ((-> (E. x ph) (A. x ph)))
+     (x ph ex17 ph x ax-17 syl))
+
+thm (ha17i ((x ps)) ((1 (-> ph ps))) ((-> ph (A. x ps)))
+     (1 ps x ax-17 syl))
+
+thm (ex7 () () ((-> (E. x (E. y ph)) (E. y (E. x ph))))
+     ((A. x (-. ph)) dn y a5gi
+        y x (-. ph) ax-7
+         (A. y (-. ph)) dnr x a5gi
+        syl
+       syl a3ri))
+thm (e7i () ((1 (E. x (E. y ph)))) ((E. y (E. x ph)))
+     (1 x y ph ex7 ax-mp))
+
+thm (he7i () ((1 (-> ph (E. x (E. y ps))))) ((-> ph (E. y (E. x ps))))
+     (1 x y ps ex7 syl))
+
+thm (ex7eq () () ((<-> (E. x (E. y ph)) (E. y (E. x ph))))
+     (x y ph ex7
+      y x ph ex7
+      biconsi))
+
+thm (mptae () () ((-> (A. x ph) (-> (E. x (-> ph ps)) (E. x ps))))
+     (ph ps ampt x a5gi he5i))
+
+thm (mptaer () () ((-> (E. x (-> ph ps)) (-> (A. x ph) (E. x ps))))
+     (x ph ps mptae com12))
+
+thm (mptea () () ((-> (E. x ph) (-> (A. x (-> ph ps)) (E. x ps))))
+     (x ph ps ex5 com12))
+
+thm (eximp () () ((<-> (E. x (-> ph ps)) (-> (A. x ph) (E. x ps))))
+     (x ph ps mptaer
+        ps ph ax-1 x e5gi
+          ph ps a1n x e5gi
+            x ph nax bimp1i
+          swap syl
+        imphypi
+      biconsi))
+
+thm (eximp1i () ((1 (E. x (-> ph ps)))) ((-> (A. x ph) (E. x ps)))
+     (1 x ph ps eximp bimp1i ax-mp))
+
+thm (heximp1i () ((1 (-> ph (E. x (-> ps ch)))))
+                 ((-> ph (-> (A. x ps) (E. x ch))))
+     (1 x ps ch eximp bimp1i syl))
+
+thm (axand () () ((<-> (A. x (/\ ph ps)) (/\ (A. x ph) (A. x ps))))
+     (ph ps and1 x a5gi
+      ph ps and2 x a5gi
+      handi
+      ph ps and x a5gi ha5i com12 andhypi
+      biconsi))
+
+thm (exor () () ((<-> (E. x (\/ ph ps)) (\/ (E. x ph) (E. x ps))))
+     (x (-. ph) ps eximp
+       x ph nex
+        (E. x ps)
+       bixi1
+      bisylr2))
+
+##################
+# Add equality
+
+term (wff (= class class))
+
+stmt (ax-8 () () ((-> (= x y) (-> (= x z) (= y z)))))
+stmt (ax-9 () () ((-. (A. x (-. (= x y))))))
+stmt (ax-10 () () ((-> (A. x (= x y)) (A. y (= y x)))))
+stmt (ax-11 () () ((-> (= x y) (-> (A. y ph) (A. x (-> (= x y) ph))))))
+stmt (ax-12 () () ((-> (-. (A. x (= x y))) 
+                       (-> (-. (A. x (= x z))) (-> (= y z) (A. x (= y z)))))))
+
+# Note about ax-9/ex9 and subkinding: if we subkind the set kind, e.g. to
+# introduce a 'natural number variable' kind, then if n were a natural
+# number variable and y a general set variable, substituting n for x
+# and y for y in ex9 would give (E. n (= n y)) which would not be true.
+# If we want to enable such variable subkinding, we would likely also
+# have to implement a subkind restriction on substitutions such that 
+# the kind of the expression substituted for y must be a subkind of the 
+# kind of the expression substituted for x, when ax-9 is applied. This
+# would be somewhat similar to distinct variables conditions in that
+# the restrictions would be passed on to theorems derived from theorems
+# with such restrictions. Interesting semantics, might need overloading
+# too.
+thm (ex9 () () ((E. x (= x y)))
+     (x y ax-9))
+
+thm (=refl_lem1 () () ((E. x (= y y)))
+     (x y ex9
+       x y y ax-8 impsimpi x e5gi
+      ax-mp))
+
+thm (=refl () () ((= x x))
+     (y x =refl_lem1 e17i))
+
+thm (=sym () () ((-> (= x y) (= y x)))
+     (x =refl
+       x y x ax-8
+      hamp))
+
+thm (=symi () ((1 (= x y))) ((= y x))
+     (1 x y =sym ax-mp))
+
+thm (h=symi () ((1 (-> ph (= x y)))) ((-> ph (= y x)))
+     (1 x y =sym syl))
+
+thm (=trans () () ((-> (= x y) (-> (= y z) (= x z))))
+     (x y =sym
+        y x z ax-8
+      syl))
+thm (=transi () ((1 (= x y)) (2 (= y z))) ((= x z))
+     (2 1 x y z =trans ax-mp ax-mp))
+
+thm (a8i () ((1 (= x y)) (2 (= x z))) ((= y z))
+     (1 =symi 2 =transi))
+
+thm (a10eq () () ((<-> (A. x (= x y)) (A. y (= y x))))
+     (x y ax-10
+      y x ax-10
+      biconsi))
+
+thm (ha10i () ((1 (-> ph (A. x (= x y))))) ((-> ph (A. y (= y x))))
+     (1 x y ax-10 syl))
+
+thm (a10eqn () () ((<-> (-. (A. x (= x y))) (-. (A. y (= y x)))))
+     (x y a10eq bini))
+
+thm (ax-4 () () ((-> (A. x ph) ph))
+     (y x ex9
+        y x ph ax-11
+          y (= y x) ph ex5
+        h1syl andhypi
+      hamp he17i hypandi y e5gi
+        y x ex9
+      swap ax-mp
+      e17i))
+
+thm (a4i () ((1 (A. x ph))) (ph)
+     (1 x ph ax-4 ax-mp))
+
+thm (ex4 () () ((-> ph (E. x ph)))
+     (x (-. ph) ax-4 a3n2i))
+
+thm (e4i () ((1 ph)) ((E. x ph))
+     (1 ph x ex4 ax-mp))
+
+thm (he4i () ((1 (-> ph ps))) ((-> ph (E. x ps)))
+     (1 ps x ex4 syl))
+
+thm (ha4i () ((1 (-> ph (A. x ps)))) ((-> ph ps))
+     (1 x ps ax-4 syl))
+
+thm (axiex () () ((-> (A. x ph) (E. x ph)))
+     (x ph ax-4 ph x ex4 syl))
+
+thm (exax () () ((<-> (E. x (A. x ph)) (A. x ph)))
+     (x ph exax1
+      (A. x ph) x ex4
+      biconsi))
+
+thm (axex () () ((<-> (A. x (E. x ph)) (E. x ph)))
+     (x (E. x ph) ax-4
+      x ph axex1
+      biconsi))
+
+thm (axax () () ((<-> (A. x (A. x ph)) (A. x ph)))
+     (x ph exax x eqax bisymi
+        x (A. x ph) axex
+          x ph exax
+        bisyl
+      bisyl))
+
+thm (exex () () ((<-> (E. x (E. x ph)) (E. x ph)))
+     (x ph axex x eqex bisymi
+        x (E. x ph) exax
+          x ph axex
+        bisyl
+      bisyl))
+
+def ((ind x ph) (-> (E. x ph) (A. x ph)))
+def (([/] y x ph) (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph))))
+
+thm (df-ind () () ((<-> (ind x ph) (-> (E. x ph) (A. x ph))))
+     ((-> (E. x ph) (A. x ph)) biid))
+
+thm (df-ind1i () ((1 (ind x ph))) ((-> (E. x ph) (A. x ph)))
+     (1 x ph df-ind bimp))
+
+thm (df-ind2i () ((2 (-> (E. x ph) (A. x ph)))) ((ind x ph))
+     (2 x ph df-ind bimp2i ax-mp))
+
+thm (df-sb () () ((<-> ([/] y x ph)
+                       (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))))
+     ((/\ (-> (= x y) ph) (E. x (/\ (= x y) ph))) biid))
+
+thm (index () () ((ind x (E. x ph)))
+     (x ph exex
+      x ph axex
+      bisylr2 bimp1i))
+
+thm (indax () () ((ind x (A. x ph)))
+     (x ph exax
+      x ph axax
+      bisylr2 bimp1i))
+
+thm (indneg+ () () ((-> (ind x ph) (ind x (-. ph))))
+     ((E. x ph) (A. x ph) a3r
+        x ph nex bimp1i
+      h1syl
+        x ph nax bimp2i
+      swap h2syl))
+
+thm (eqind () ((1 (<-> ph ps))) ((<-> (ind x ph) (ind x ps)))
+     (1 x eqex
+      1 x eqax
+      bixi))
+
+thm (indneg- () () ((-> (ind x (-. ph)) (ind x ph)))
+     (x (-. ph) indneg+
+        ph dneq x eqind bimp2i
+      syl))
+
+thm (indneg () () ((<-> (ind x ph) (ind x (-. ph))))
+     (x ph indneg+
+      x ph indneg-
+      biconsi))
+
+thm (indneg+i () ((1 (ind x ph))) ((ind x (-. ph)))
+     (1 x ph indneg+ ax-mp))
+
+thm (indneg-i () ((1 (ind x (-. ph)))) ((ind x ph))
+     (1 x ph indneg- ax-mp))
+
+thm (indimp_lem1 () () ((-> (-> (E. x ph) (A. x ps)) (A. x (-> ph ps))))
+     (ps ph ax-1 x a5gi
+	x ph nex bimp1i
+          ph ps a1n x a5gi
+	syl
+      imphypi
+      ))
+
+thm (indimp () () ((-> (ind x ph) (-> (ind x ps) (ind x (-> ph ps)))))
+     (x ph df-ind bimp1i
+        x ph ps mptaer com12
+      h1syl com23 andhypi
+        x ps df-ind bimp1i com12
+      h1syl com23 hypandi com23 andhypi
+	x ph ps indimp_lem1
+      h1syl hypandi
+))
+
+thm (ind17 ((x ph)) () ((ind x ph))
+     (x ph ea17))
+
+thm (indimpi () ((1 (ind x ph)) (2 (ind x ps))) ((ind x (-> ph ps)))
+    (2 1 x ph ps indimp ax-mp ax-mp))
+
+thm (indor () () ((-> (ind x ph) (-> (ind x ps) (ind x (\/ ph ps)))))
+     (x ph indneg bimp1i
+        x (-. ph) ps indimp 
+      syl))
+
+thm (indori () ((1 (ind x ph)) (2 (ind x ps))) ((ind x (\/ ph ps)))
+     (2 1 x ph ps indor ax-mp ax-mp))
+
+thm (indand () () ((-> (ind x ph) (-> (ind x ps) (ind x (/\ ph ps)))))
+     (x ps indneg bimp1i
+        x ph (-. ps) indimp
+      h2syl
+        x (-> ph (-. ps)) indneg bimp1i
+      h1syl))
+
+thm (indandi () ((1 (ind x ph)) (2 (ind x ps))) ((ind x (/\ ph ps)))
+     (2 1 x ph ps indand ax-mp ax-mp))
+
+thm (axeyax () () ((<-> (A. x (E. y (A. x ph))) (E. y (A. x ph))))
+     (x ph exax y eqex
+        y x (A. x ph) ex7eq
+      bisylr1 x eqax
+        x (E. y (A. x ph)) axex
+      bisyl
+        x y (A. x ph) ex7eq
+      bisyl
+        x ph exax y eqex
+      bisyl
+     ))
+
+# Note, (ind x ph) might be true for a particular value of y, but
+# not true in general for every y. In this example, it's true for Y1 and Y2,
+# but not Y3:
+#
+# ph   X ---->
+#      X1 X2 X3
+# Y Y1 T  T  T
+# | Y2 T  T  T
+# V Y3 T  F  T
+#   
+# (A. y ph)
+#      T  F  T
+# If we only assume (ind x ph) for a particular y, then (ind x (A. y ph))
+# need not be true.
+thm (ind+ax () () ((-> (A. y (ind x ph)) (ind x (A. y ph))))
+     (y ph ax-4 x e5gi
+        (E. x ph) (A. x ph) ampt
+      syl y a5gi ha5i
+         y x ph ax-7
+      h1syl
+        y x ph axeyax bimp2i
+      swap syl com12
+      ))
+
+thm (ind+axi () ((1 (ind x ph))) ((ind x (A. y ph)))
+     (1 y ax-gen
+        y x ph ind+ax
+      ax-mp))
+
+thm (ind+ex () () ((-> (A. y (ind x ph)) (ind x (E. y ph))))
+     (x ph indneg+ y a5gi
+        y x (-. ph) ind+ax
+      syl
+        x (A. y (-. ph)) indneg+
+      syl))
+
+thm (extend () () ((-> (E. x ph) (-> (A. x ps) (E. x (/\ ph ps)))))
+     (ph ps and x e5gi heximp1i))
+
+thm (extendi () ((1 (E. x ph)) (2 (A. x ps))) ((E. x (/\ ph ps)))
+     (2 1 x ph ps extend ax-mp ax-mp))
+
+thm (exusehyp () () ((-> (E. x ph) (-> (A. x (-> ph ps)) (E. x (/\ ph ps)))))
+     (ph ps usehypt x a5gi he5i com12))
+
+thm (sbdv ((x ph)) () ((<-> ([/] y x ph) ph))
+     ((-> (= x y) ph) (E. x (/\ (= x y) ph)) and2
+	(= x y) ph and2 x e5gi
+      syl
+         x ph ex17
+      syl
+      ph (= x y) ax-1
+        ph x ax-17
+	  x y ex9
+	    x (= x y) ph extend
+	  ax-mp
+        syl
+      handi
+      biconsi))
+
+thm (sbxx () () ((<-> ([/] x x ph) ph))
+     (x =refl
+        (-> (= x x) ph) (E. x (/\ (= x x) ph)) and1
+      hamp
+      ph (= x x) ax-1
+        x =refl
+          (= x x) ph and
+	ax-mp x he4i
+      handi
+      biconsi))
+
+thm (sbax () () ((<-> ([/] y x (A. x ph)) (A. x ph)))
+      ((= x y) (A. x ph) and2 x e5gi
+         x ph exax bimp1i
+       syl (-> (= x y) (A. x ph)) a1i com12 andhypi
+       (A. x ph) (= x y) ax-1
+          x y ex9
+             x (= x y) (A. x ph) extend
+          ax-mp
+            x ph axax bimp2i
+	  swap syl
+       handi
+       biconsi
+       ))
+
+thm (ex11 () () ((-> (= x y) (-> (E. x (/\ (= x y) ph)) (E. y ph))))
+     (y ph nex bimp1i
+      x y (-. ph) ax-11
+      h2syl ha3n1i
+       x (-> (= x y) (-. ph)) nax bimp2i
+      swap h2syl
+        (= x y) ph df-and x eqex bimp1i
+      swap h2syl))
+
+
+thm (exay () () ((-> (E. x (A. y ph)) (A. y (E. x ph))))
+     (ph x ex4 y a5gi x e5gi
+	x ph axex y eqax
+          x y (E. x ph) ax7eq
+        swap bisyl x eqex bisymi
+          x (A. y (E. x ph)) exax
+        bisyl bimp1i
+      syl ha4i))
+
+thm (exayi () ((1 (E. x (A. y ph)))) ((A. y (E. x ph)))
+     (1 x y ph exay ax-mp))
+
+
+thm (axdistinctor () () ((<-> (A. x (-. (A. x (= x y)))) (-. (A. x (= x y)))))
+     (x (= x y) nax x eqax
+        x (-. (= x y)) axex
+      bisyl
+        x (= x y) nax
+      bisymi bisyl))
+
+thm (haxdistincti () ((1 (-> (A. x (-. (A. x (= x y)))) ph)))
+     ((-> (-. (A. x (= x y))) ph))
+     (x y axdistinctor bimp2i 1 syl))
+
+thm (axdistinctor2 () () ((<-> (A. y (-. (A. x (= x y)))) (-. (A. x (= x y)))))
+     (
+     x y a10eqn y eqax
+        y x axdistinctor
+     bisyl
+        y x a10eqn
+     bisyl
+     ))
+
+thm (haxdistinct2i () ((1 (-> (A. y (-. (A. x (= x y)))) ph)))
+     ((-> (-. (A. x (= x y))) ph))
+     (y x axdistinctor2 bimp2i 1 syl))
+
+thm (a12ind () () ((-> (-. (A. z (= z x)))
+                       (-> (-. (A. z (= z y)))
+                           (ind z (= x y)))))
+     (z x y ax-12 z a5gi ha5i
+      haxdistincti
+      com12 haxdistincti com12
+      andhypi he5i
+        z (= x y) exax bimp1i
+      h1syl
+      hypandi))
+
+
+#thm (ax11s () () ((-> (= x y) (-> (A. y (-> (= y x) ph)) 
+#                                  (A. x (-> (= x y) ph)))))
+#     (x y (-> (= y x) ph) ax-11
+#        x y =sym ph imx2 (= x y) imx1
+#          (= x y) ph impsimp
+#        syl x a5gi
+#      h1syl))
+
+thm (ax11s () () ((-> (= x y) (-> (A. y (-> (= y x) ph)) 
+                                  (A. x (-> (= x y) ph)))))
+     (x y (-> (= y x) ph) ax-11
+        x y =sym
+          (= x y) (= y x) ph ax-2
+        hamp x a5gi
+      h1syl))
+
+
+#thm (ex11s () () ((-> (= x y) 
+#                      (-> (E. y (/\ (= y x) ph)) (E. x (/\ (= x y) ph)))))
+#     (y x (/\ (= x y) ph) ex11
+#        (= y x) ph and1 dup
+#             y x =sym
+#          syl
+#            (= y x) ph and2
+#          handi
+#        handi y e5gi
+#      swap h2syl
+#        x y =sym
+#      swap syl))
+
+thm (ex11s () () ((-> (= x y) 
+                      (-> (E. y (/\ (= y x) ph)) (E. x (/\ (= x y) ph)))))
+     (y x (-. ph) ax11s ha3ri
+        x (-> (= x y) (-. ph)) nax bimp1i
+      h1syl
+        y (-> (= y x) (-. ph)) nax bimp2i
+      swap h2syl
+        x y =sym
+      swap syl))
+
+thm (ndshax1 () ((1 (-> (A. x (= x y)) ps))) ((-> (A. x (= x y)) (A. x ps)))
+     (x (= x y) axax bimp2i
+        1 x a5gi
+     syl
+     ))
+
+thm (ndshax2 () ((1 (-> (A. x (= x y)) ps))) ((-> (A. x (= x y)) (A. y ps)))
+     (x y ax-10
+        y x ax-10 
+          1 
+        syl ndshax1
+      syl
+     ))
+
+thm (nds1 ((x y)(x z)) () ((-> (A. x (= x y)) (A. z (= z y))))
+     (x z ex9
+        x z y ax-8 com12 x a5gi he5i
+      hamp he17i
+        z y =sym
+      syl ndshax2
+        y z ax-10
+      syl))
+
+thm (nds2 ((x y)) () ((-> (A. x (= x y)) (A. z (= z y))))
+     (x y w nds1
+        w y z nds1
+      syl))
+
+thm (nds3 ((x y)) () ((-> (A. x (= x y)) (= z w)))
+     (x y w nds2 ha10i
+        x y z nds2 ha10i
+          y z w ax-8 y a5gi ha5i
+        syl
+      h2syl impsimpi ha4i))
+
+thm (nds4 ((x y)(z x)(z y)) () ((-> (A. x (= x y)) (A. z (= z w))))
+     ((A. x (= x y)) z ax-17
+         x y z w nds3 z a5gi
+       syl))
+
+thm (nds ((x y)) () ((-> (A. x (= x y)) (A. z (= z w))))
+     (x y u v nds4
+        u v z w nds4
+      syl))
+
+thm (ndseq ((x y) (z w)) () ((<-> (A. x (= x y)) (A. z (= z w))))
+     (x y z w nds
+      z w x y nds
+      biconsi))
+
+thm (ndsax1 () () ((-> (A. x (= x y)) (-> (A. y ph) (A. x ph))))
+     (x (= x y) ax-4
+        x y ph ax-11
+      syl andhypi ha5i hypandi com23 impsimpi))
+
+thm (ndsax () () ((-> (A. x (= x y)) (<-> (A. x ph) (A. y ph))))
+     (x y ax-10 
+        y x ph ndsax1
+      syl
+        x y ph ndsax1
+      handi))
+
+thm (ndsaxp ((x y)) () ((-> (A. x (= x y)) (<-> (A. z ph) (A. w ph))))
+     (x y z w nds
+        z w ph ndsax
+      syl))
+
+thm (ndsexp ((x y)) () ((-> (A. x (= x y)) (<-> (E. z ph) (E. w ph))))
+     (x y w (-. ph) z ndsaxp
+         (A. w (-. ph)) (A. z (-. ph)) bin-f
+      syl hbisymi))
+
+thm (ndsea ((x y)) () ((-> (A. x (= x y)) (-> (E. z ph) (A. z ph))))
+     (x y z ph w ndsexp hbimp1i
+        w ph ex17
+      h1syl
+        ph w ax-17
+      h1syl
+        x y w ph z ndsaxp hbimp1i com12
+      h1syl com23 impsimpi))
+
+thm (ndsind ((x y)) () ((-> (A. x (= x y)) (ind z ph)))
+     (x y z ph ndsea))
+
+thm (a11nds1 () () ((-> (A. x (= x y)) (-> (A. y (= y z)) 
+                                           (A. x (A. y (= y z))))))
+     (x y (= y z) ax-11 andhypi ha5i hypandi com23
+        y x =sym
+      swap syl com12 ndshax2 ha5i
+        x y ax-10
+      swap h2syl impsimpi ha5i
+        y (= y z) axax bimp2i
+      swap h2syl
+        y x (= y z) ax-7
+      h1syl))
+
+thm (exayax () () ((<-> (E. x (A. y (A. x ph))) (A. y (A. x ph))))
+     (y x ph ax7eq x eqex
+        x (A. y ph) exax
+      bisyl
+        x y ph ax7eq
+      bisyl
+     ))
+
+thm (axayy=x () () ((<-> (A. x (A. y (= y x))) (A. y (= y x))))
+     (y x a10eq x eqax
+        x (= x y) axax
+      bisyl
+        x y a10eq
+      bisyl))
+
+thm (a11nds2 () () ((-> (E. z (A. x (= x y))) (-> (A. y (= y z)) 
+                                                  (A. x (A. y (= y z))))))
+     (x y z a11nds1
+        y z ax-10 x a5gi
+      h1syl z e5gi heximp1i
+        z y axayy=x bimp2i
+      swap h2syl
+        z x (= z y) exayax bimp1i
+      h1syl
+        z y ax-10 x a5gi
+      h1syl
+     ))
+
+thm (indnds1 () () ((-> (A. x (= x y)) (A. z (A. x (= x y)))))
+     (z x y ax-12 x a5gi haxdistinct2i ha5i andhypi ha5i
+        x z (= x y) ax-7
+      h1syl hypandi
+        z x y a11nds1 (A. x (-. (A. z (= z y)))) a1i com12
+      swap casesi
+        x z y a11nds2
+          x y ax-10
+        swap h2syl
+          y x ax-10 z a5gi
+        h1syl
+          x (A. z (= z y)) df-ex bimp2i
+        swap syl
+     casesi
+     ))
+
+thm (indnds () () ((ind z (A. x (= x y))))
+     (
+     x y z indnds1 z e5gi
+        z (A. x (= x y)) exax bimp1i
+     syl
+     ))
+
+thm (indds () () ((ind z (-. (A. x (= x y)))))
+     (z x y indnds indneg+i
+     ))
+
+thm (indnds2 () () ((-> (E. z (A. x (= x y))) (A. x (= x y))))
+     (z x y indnds df-ind1i ha4i
+    ))
+
+thm (indds1 () () ((-> (-. (A. x (= x y))) (A. z (-. (A. x (= x y))))))
+     (z x y indds df-ind1i
+        (-. (A. x (= x y))) z ex4
+      swap syl
+     ))
+
+thm (indds2 () () ((-> (E. z (-. (A. x (= x y)))) (-. (A. x (= x y)))))
+     (z x y indds df-ind1i ha4i))
+
+thm (dsh1i () ((1 (-> (A. z (-. (A. x (= x y)))) ph)))
+                ((-> (-. (A. x (= x y))) ph))
+     (x y z indds1 1 syl))
+
+thm (hdsh1i () ((1 (-> ph  (-> (A. z (-. (A. x (= x y)))) ps))))
+                 ((-> ph (-> (-. (A. x (= x y))) ps)))
+     (1 com12 dsh1i com12))
+
+thm (sbaxex () () ((-> (A. x (-> (= x y) ph)) (E. x (/\ (= x y) ph))))
+     (x y ex9
+        x (= x y) ph exusehyp
+      ax-mp))
+
+# The next four, the theorem names and statements (but not necessarily
+# the proofs) come from metamath's set_mm.
+
+thm (sb1 () () ((-> ([/] y x ph) (E. x (/\ (= x y) ph))))
+     ((-> (= x y) ph) (E. x (/\ (= x y) ph)) and2))
+
+thm (sb2 () () ((-> (A. x (-> (= x y) ph)) ([/] y x ph)))
+     (x (-> (= x y) ph) ax-4
+      x y ph sbaxex
+      handi))
+
+thm (sbimi () ((1 (-> ph ps))) ((-> ([/] y x ph) ([/] y x ps)))
+     (1 (= x y) imx1
+      1 (= x y) push x e5gi
+      join))
+
+thm (sbbii () ((1 (<-> ph ps))) ((<-> ([/] y x ph) ([/] y x ps)))
+     (1 bimp1i y x sbimi
+      1 bimp2i y x sbimi
+      biconsi))
+
+# ....
+
+thm (sbintro1 () () ((-> (A. y ph) (E. y (A. x (-> (= x y) ph)))))
+     (y x =sym
+        x y ph ax-11
+      syl y e5gi
+        y x ex9
+      swap ax-mp eximp1i
+         y ph axax bimp2i
+      swap syl
+     ))
+
+thm (sbintro2 ((y ph)) () ((-> ph (E. y (A. x (-> (= x y) ph)))))
+     (ph y ax-17
+        y ph x sbintro1
+      syl
+     ))
+
+thm (sbintro3 ((y ph)) () ((-> (E. x ph) (E. y (A. x (-> (= x y) ph)))))
+     (ph y x sbintro2 x e5gi he7i
+        x (-> (= x y) ph) exax y eqex bimp1i
+      syl
+     ))
+
+thm (sbintro ((y ph)) () ((<-> (E. x ph) (E. y (A. x (-> (= x y) ph)))))
+     (
+     x ph y sbintro3
+	x y ex9
+          x (= x y) ph ex5
+        hamp y e5gi he7i
+          y ph ex17 x e5gi
+        syl
+     biconsi
+     ))
+
+# Ugh! This is a bit too long; not too hard though.
+thm (sblem1 ((x z) (x y)) () ((-> (A. x (-> (= x z) (/\ (= x y) ph)))
+                       (A. x (-> (= x y) ph))))
+     (
+     (= x y) ph and1 (= x z) imx1 x a5gi
+        x z y ax-8 a2i x a5gi
+     syl he5i
+        x z ex9
+     swap hamp he17i h=symi x ha17i
+        x y =sym
+          y x z ax-8
+        syl com12 x a5gi
+     syl
+        (= x y) (= x z) (/\ (= x y) ph) sylt x a5gi ha5i
+     syl impsimpi
+        (= x y) ph and2 (= x y) imx1 x a5gi
+     syl
+     ))
+
+thm (sblem2 ((x y)) () ((-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph))))
+     (x (/\ (= x y) ph) z sbintro3
+	x z y ph sblem1 z e5gi
+      syl he17i
+     ))
+
+thm (sblem3 ((x y)) () ((-> (= x y) (-> ph (A. x (-> (= x y) ph)))))
+     ((/\ (= x y) ph) x ex4
+        x y ph sblem2
+      syl hypandi com12
+     ))
+
+thm (sblem4 ((x y)) () ((<-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph))))
+     (x y ph sblem2
+      x y ph sbaxex
+      biconsi
+     ))
+
+thm (sblem () () 
+	((-> (-. (A. x (= x y)))
+             (-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph)))))
+     (
+      x y ph ex11 ..	
+      x y ph ax-11 com12 andhypi x e5gi
+        x (-> (= x y) ph) exax bimp1i
+      syl
+     ))
+
+thm (ax11p () () ((-> (-. (A. x (= x y))) 
+		      (-> (= x y) (-> ph (A. x (-> (= x y) ph))))))
+     (x y ph ax-11))
+
+thm (sbn () () ((<-> ([/] y x (-. ph)) (-. ([/] y x ph))))
+     ((-> (= x y) (-. ph)) (= x y) and2
+      (= x y) (-. ph) ampt andhypi
+      hnimpi
+        (-> (= x y) ph) (E. x (/\ (= x y) ph)) and1 a3ri 
+      syl hypandi
+        (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))) and1
+      swap h2syl
+      # WTS: (-> (E. x (/\ (= x y) (-. ph))) (A. x (-. (/\ (= x y) ph))))
+      # WTS: (-> (/\ (= x y) (-. ph)) (-. (/\ (= x y) ph)))
+      (= x y) (-. ph) and2
+        (= x y) ph and2 a3ri
+      syl
+))
+
+thm (sbimp () () ((<-> ([/] y x (-> ph ps)) (-> ([/] y x ph) ([/] y x ps))))
+     ())
