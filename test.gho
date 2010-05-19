@@ -1071,6 +1071,11 @@ thm (nds ((x y)) () ((-> (A. x (= x y)) (A. z (= z w))))
         u v z w nds4
       syl))
 
+thm (ds2 ((x y)) () ((-> (-. (A. z (= z w))) (-. (A. x (= x y)))))
+     (
+      x y z w nds a3ri
+     ))
+
 thm (ndseq ((x y) (z w)) () ((<-> (A. x (= x y)) (A. z (= z w))))
      (x y z w nds
       z w x y nds
@@ -1242,6 +1247,7 @@ thm (sbintro2 ((y ph)) () ((-> ph (E. y (A. x (-> (= x y) ph)))))
       syl
      ))
 
+# sbintro is an important technical theorem.
 thm (sbintro3 ((y ph)) () ((-> (E. x ph) (E. y (A. x (-> (= x y) ph)))))
      (ph y x sbintro2 x e5gi he7i
         x (-> (= x y) ph) exax y eqex bimp1i
@@ -1259,15 +1265,19 @@ thm (sbintro ((y ph)) () ((<-> (E. x ph) (E. y (A. x (-> (= x y) ph)))))
      biconsi
      ))
 
-# Ugh! This is a bit too long; not too hard though.
-thm (sblem1 ((x z) (x y)) () ((-> (A. x (-> (= x z) (/\ (= x y) ph)))
-                       (A. x (-> (= x y) ph))))
+thm (sblem1a () () ((-> (A. x (-> (= x z) (/\ (= x y) ph))) (E. x (= z y))))
      (
      (= x y) ph and1 (= x z) imx1 x a5gi
         x z y ax-8 a2i x a5gi
      syl he5i
         x z ex9
-     swap hamp he17i h=symi x ha17i
+     swap hamp
+     ))
+
+thm (sblem1 ((x z) (x y)) () ((-> (A. x (-> (= x z) (/\ (= x y) ph)))
+                       (A. x (-> (= x y) ph))))
+     (
+     x z y ph sblem1a he17i h=symi x ha17i
         x y =sym
           y x z ax-8
         syl com12 x a5gi
@@ -1276,6 +1286,27 @@ thm (sblem1 ((x z) (x y)) () ((-> (A. x (-> (= x z) (/\ (= x y) ph)))
      syl impsimpi
         (= x y) ph and2 (= x y) imx1 x a5gi
      syl
+     ))
+
+thm (sblem1d ((z x)) () ((-> (-. (A. x (= x y))) 
+                             (-> (A. x (-> (= x z) (/\ (= x y) ph)))
+                                 (A. x (-> (= x y) ph)))))
+     (
+      x z y ph sblem1a
+        x z y a12ind
+          x (= z y) df-ind bimp1i
+        h1syl andhypi
+      h2syl hypandi com12
+        x y x z ds2
+      swap h2syl impsimpi
+        z y =sym
+          x y z =trans
+        h2syl com12
+          (= x y) (= x z) (/\ (= x y) ph) sylt
+        syl andhypi
+          (= x y) ph and2
+        h1syl hypandi x a5gi ha5i
+      h1syl com12 com23 impsimpi com12
      ))
 
 thm (sblem2 ((x y)) () ((-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph))))
@@ -1296,28 +1327,34 @@ thm (sblem4 ((x y)) () ((<-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph))))
       biconsi
      ))
 
-thm (sblem () () 
-	((-> (-. (A. x (= x y)))
-             (-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph)))))
+thm (sblem () () ((-> (-. (A. x (= x y)))
+                      (-> (E. x (/\ (= x y) ph)) (A. x (-> (= x y) ph)))))
      (
-      x y ph ex11 ..	
-      x y ph ax-11 com12 andhypi x e5gi
-        x (-> (= x y) ph) exax bimp1i
-      syl
+      x (/\ (= x y) ph) z sbintro3
+        x y z ph sblem1d z a5gi he5i
+      h2syl
+        x y z indds1
+      swap syl andhypi he17i hypandi
      ))
+
 
 thm (ax11p () () ((-> (-. (A. x (= x y))) 
 		      (-> (= x y) (-> ph (A. x (-> (= x y) ph))))))
-     (x y ph ax-11))
+     ((/\ (= x y) ph) x ex4
+         x y ph sblem
+      h2syl com12 hypandi com12 com23 com12
+     ))
 
+# WTS (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))   <-> 
+#     (-. (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph))))
 thm (sbn () () ((<-> ([/] y x (-. ph)) (-. ([/] y x ph))))
      ((-> (= x y) (-. ph)) (= x y) and2
       (= x y) (-. ph) ampt andhypi
       hnimpi
-        (-> (= x y) ph) (E. x (/\ (= x y) ph)) and1 a3ri 
+        (-> (= x y) ph) (E. x (/\ (= x y) ph)) and1 a3ri
       syl hypandi
         (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))) and1
-      swap h2syl
+      swap h2syl ..
       # WTS: (-> (E. x (/\ (= x y) (-. ph))) (A. x (-. (/\ (= x y) ph))))
       # WTS: (-> (/\ (= x y) (-. ph)) (-. (/\ (= x y) ph)))
       (= x y) (-. ph) and2
