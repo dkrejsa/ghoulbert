@@ -113,6 +113,9 @@ func (k2 *Kind) contain(k1 *Kind) {
     }
 }
 
+func (k *Kind) String() string {
+    return string(*k.name)
+}
 
 // Want to think about using interfaces to represent:
 // Kinded objects (a.k.a. expressions)
@@ -222,8 +225,6 @@ type Statement struct {
     // variables conditions
     dv_bits []uint32
 
-    // Is this an equivalence statement?
-    isEquiv bool
 }
 
 type Theorem struct {
@@ -237,8 +238,7 @@ type Theorem struct {
 
 // Proof-in-Progress structure
 type Pip struct {
-    allowEquiv bool
-    equivDone  bool
+    isDefThm   bool
     gh         *Ghoulbert
     vars       []*Variable  // variables in hypotheses or conclusions
     pf_stack   []Expression // Proven expressions and wild expressions
@@ -256,8 +256,7 @@ type Pip struct {
 }
 
 func (pip *Pip) Init(vars []*Variable, hypmap map[*Atom]int, varmap map[*Atom] *IVar) {
-    pip.allowEquiv = false
-    pip.equivDone = false
+    pip.isDefThm = false
     pip.vars = vars
     pip.pf_stack = pip.pf_stack[0:0]
     pip.wild_exprs = 0
@@ -287,15 +286,6 @@ func (pip *Pip) PushWild(e Expression) {
 }
 
 func (pip *Pip) Apply(stmt *Statement) bool {
-
-    if stmt.isEquiv {
-        if !pip.allowEquiv {
-            errMsg("Equivalence statements are only allowed at the end\n" +
-                   "of a definition justification proof.\n")
-            return false
-        }
-        pip.equivDone = true
-    }
 
     if stmt.wild_vars != pip.wild_exprs {
         errMsg("Assertion %s requrires %d wild variables, " +
@@ -725,9 +715,8 @@ type CommandList struct {
     variable Atom // "var" is a keyword
     term     Atom
     stmt     Atom
-    def      Atom
+    defthm   Atom
     thm      Atom
-    equiv    Atom
 }
 
 type Ghoulbert struct {
@@ -754,8 +743,7 @@ func NewGhoulbert() *Ghoulbert {
     gh.cmds.term = Atom("term")
     gh.cmds.stmt = Atom("stmt")
     gh.cmds.thm = Atom("thm")
-    gh.cmds.def = Atom("def")
-    gh.cmds.equiv = Atom("equiv")
+    gh.cmds.defthm = Atom("defthm")
     // Hmm, consider symbol leak: if a name gets interned,
     // and then is no longer needed, how can we know when it may
     // be removed from the intern map? Maintain a reference count
@@ -766,8 +754,7 @@ func NewGhoulbert() *Ghoulbert {
     intern[string(gh.cmds.term)] = &gh.cmds.term
     intern[string(gh.cmds.stmt)] = &gh.cmds.stmt
     intern[string(gh.cmds.thm)] = &gh.cmds.thm
-    intern[string(gh.cmds.def)] = &gh.cmds.def
-    intern[string(gh.cmds.equiv)] = &gh.cmds.equiv
+    intern[string(gh.cmds.defthm)] = &gh.cmds.defthm
     gh.intern = intern
     gh.kinds = make(map[*Atom]*Kind, 128)
     gh.syms = make(map[*Atom]Symbolic, 512)
@@ -1223,6 +1210,89 @@ func MatchExpand(expr Expression, conc Expression, env *Environ) bool {
     return MatchExpand(expr, dt.expr, &Environ{te.args, dmap, env})
 }
 
+func DefExprCopy(exp Expression, vect []*IVar, index *int,
+                 allvars int) Expression {
+    // errMsg ("exp=%v, vect=%p, index=%v, allvars=%v\n", exp, vect, index, allvars)
+    v := exp.asIVar()
+    if v != nil {
+        w := vect[v.index]
+        if w == nil {
+           // All variables in the expression that are not arguments
+           // of the matching definition term must be proof dummies.
+           if v.index < allvars { return nil }
+           w = &IVar{v.kind, *index}
+           (*index)++
+        }
+        return w
+    }
+    te := exp.asTermExpr()
+    nargs := len(te.args)
+    args := make([]Expression, nargs)
+    cte := &TermExpr{te.term, args}
+    for j, sub := range te.args {
+        e := DefExprCopy(sub, vect, index, allvars)
+        if e == nil { return nil }
+        args[j] = e
+    }
+    return cte
+}
+
+func DefConcMatch(conc Expression, exp Expression, dterm *Term,
+                  allvars int, vect []*IVar) bool {
+    // errMsg ("conc=%v, exp=%v, dterm=%v, allvars=%v, vect=%p\n", conc, exp, dterm, allvars, vect)
+    v := conc.asIVar()
+    w := exp.asIVar()
+    if v != nil {
+        if w == nil || w.index != v.index { return false }
+        return true
+    } else if w != nil {
+        // We don't allow definitions that expand to a variable
+        return false 
+    }
+    cte := conc.asTermExpr()
+    te := exp.asTermExpr()
+
+    if cte.term != dterm {
+        // errMsg ("cte=%v, te=%v, cte.term=%p, te.term=%p\n", cte, te, cte.term, te.term)
+        if cte.term != te.term { return false }
+        for j, sub := range cte.args {
+            // errMsg ("sub=%v, te.args[j]=%v\n", sub, te.args[j])
+            if !DefConcMatch(sub, te.args[j], dterm, allvars, vect) { return false }
+        }
+        return true
+    }
+
+    var j int
+
+    // Check that all of cte's arguments are variables, and that each 
+    // such variable occurs only once. Note, kind checking already occurred
+    // when the conclusion was parsed.
+
+    for j = range vect {
+        vect[j] = nil
+    }
+    for j, sub := range cte.args {
+        v = sub.asIVar()
+        if v == nil { return false }
+        if vect[v.index] != nil { return false }
+        vect[v.index] = &IVar{v.kind, j}
+    }
+    index := j
+    e := DefExprCopy(exp, vect, &index, allvars)
+    if e == nil {
+        errMsg ("DefExprCopy returns 0\n")
+        return false
+    }
+
+    if dterm.expr == nil {
+        // This is the first match against the definition term.
+        dterm.expr = e
+	dterm.nDummies = index - j
+        return true
+    }
+    return ExactMatch(dterm.expr, e)
+}
+
 func SubstExpr(conc Expression, subst []Expression) Expression {
     v := conc.asIVar()
     if v != nil {
@@ -1364,36 +1434,48 @@ func (pip *Pip) DvCheck(stmt *Statement) bool {
 //          1 syntax error
 //        < 0 some other error
 
-func (gh *Ghoulbert) ThmCmd(l *List) int {
-    if l == nil || l.length != 5 {
+func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
+    if l == nil || (!defthm && l.length != 5) || (defthm && l.length != 7) {
     thm_syntax:
         return 1
     }
     rem := l.head
     thname := rem.car.asAtom()
-    if thname == nil {
-        goto thm_syntax
-    }
+    if thname == nil { goto thm_syntax }
     rem = rem.cdr
+
+    var kname *Atom
+    var defl *List
+    var nargs int
+    var dname *Atom
+
+    if defthm {
+        kname = rem.car.asAtom()
+        if kname == nil { goto thm_syntax }
+        rem = rem.cdr
+
+        defl = rem.car.asList()  // definiendum
+        nargs = defl.length - 1
+        if defl == nil || nargs < 0 { goto thm_syntax }
+        dname = defl.head.car.asAtom()
+        if dname == nil { goto thm_syntax }
+        rem = rem.cdr
+    }
+
     dvarl := rem.car.asList()
-    if dvarl == nil {
-        goto thm_syntax
-    }
+    if dvarl == nil { goto thm_syntax }
     rem = rem.cdr
+
     hypl := rem.car.asList()
-    if hypl == nil {
-        goto thm_syntax
-    }
+    if hypl == nil { goto thm_syntax }
     rem = rem.cdr
+
     concl := rem.car.asList()
-    if concl == nil {
-        goto thm_syntax
-    }
+    if concl == nil { goto thm_syntax }
     rem = rem.cdr
+
     proofl := rem.car.asList()
-    if proofl == nil {
-        goto thm_syntax
-    }
+    if proofl == nil { goto thm_syntax }
 
     gh.pip.thm_name = thname
 
@@ -1417,6 +1499,8 @@ func (gh *Ghoulbert) ThmCmd(l *List) int {
     hypnames := make([]*Atom, hypl.length)
     hypmap := make(map[*Atom]int, hypl.length)
 
+    // TODO: replace ((HYPNAME HYPEXPR) ...) syntax with
+    //       ({HYPNAME1 HYPEXPR1 HYPNAME2 HYPEXPR2} ... )
     j := 0
     for rem = hypl.head; rem != nil; rem = rem.cdr {
         hpair := rem.car.asList()
@@ -1446,6 +1530,48 @@ func (gh *Ghoulbert) ThmCmd(l *List) int {
     }
     hypvars := len(varmap)
 
+    var k *Kind
+    var argkinds []*Kind
+    var dterm *Term
+
+    if defthm {
+        k, found = gh.kinds[kname]
+        if !found {
+            errMsg ("Unknown kind %s\n", *kname)
+            return -1
+        }
+
+        _, found = gh.terms[dname]
+        if found {
+            errMsg ("A term of name %s already exists.\n", *dname)
+            return -1
+    	}
+
+        argkinds = make([]*Kind, nargs)
+        dterm = &Term{k, dname, argkinds, nil, 0}
+
+        j := 0
+        // errMsg ("defl=%v, defl.head=%v, nargs=%v\n", defl, defl.head, nargs)
+        for argkl := defl.head.cdr; argkl != nil; argkl = argkl.cdr {
+            akname := argkl.car.asAtom()
+            if akname == nil { goto thm_syntax }
+
+            ak, found := gh.kinds[akname]
+            if !found {
+                errMsg ("Unknown kind '%s'\n", *akname)
+                return -1
+            }
+            argkinds[j] = ak
+            j++
+        }
+        // For a defthm, we need to temporarily add the new definition
+        // term to gh.terms, so that it is visible when parsing the
+        // conclusion(s); but we remove it during the proof proper, where
+        // it must not be visible yet.
+
+        gh.terms[dname] = dterm
+    }
+
     concs := make([]Expression, concl.length)
     j = 0
     for rem = concl.head; rem != nil; rem = rem.cdr {
@@ -1460,6 +1586,11 @@ func (gh *Ghoulbert) ThmCmd(l *List) int {
     allvars := len(varmap)
     vars := make([]*Variable, allvars)
     copy(vars, gh.scratch_vars)
+
+    if defthm {
+        // Now remove the new dname from gh.terms
+        gh.terms[dname] = nil, false
+    }
 
     thm := new(Theorem)
     thm.name = thname
@@ -1549,18 +1680,49 @@ func (gh *Ghoulbert) ThmCmd(l *List) int {
         return -1
     }
 
-    // Check that the conclusions are as claimed, expanding definitions
+    // Check that we have the expected number of conclusions.
     if len(pip.pf_stack) != len(thm.concs) {
         errMsg("Wrong number of conclusions on proof stack -- " +
                "expected %d but %d remain\n",
                len(thm.concs), len(pip.pf_stack))
         return -1
     }
-    for j, exp := range thm.concs {
-        if !MatchExpand(pip.pf_stack[j], exp, nil) {
-            errMsg("Proven expression does not match expected conclusion %d\n",
-                   j)
-            return -1
+    
+    // Check that the conclusions are as claimed.  For non-definition
+    // theorems, the conclusions must be identical.  For definition theorems,
+    // the conclusions must 'match' the remnant expressions.
+
+    if defthm {
+        // Criteria for good defthm conclusion(s) match:
+        // 1. The definition term must occur at least once in the conclusions.
+        // 2. The arguments of each occurrence of the definition term must
+        //    be simple variables, not term expressions. [Could we weaken
+        //    this to say just that for at least one occurrence of the
+        //    definition term, all of the arguments are variables?]
+        //    The argument variables must all occur in the expression that the
+        //    definition term occurrence substitutes for.
+        // 3  Any variables that occur in the expression substituted by
+        //    a definition term but that are not among the definition term
+        //    arguments must be proof dummies (i.e. must not occur in the
+        //    hypotheses or conclusions).  Such variables will correspond to
+        //    definition dummy variables.
+        // 4. Each occurrence of the definition term must determine an 
+        //    identical [Later: consistent? unifiable?] definiens, up to 1-1
+        //    consistent replacement of variables.
+        vect := make([]*IVar, len(varmap))
+        for j, exp := range thm.concs {
+            if !DefConcMatch(exp, pip.pf_stack[j], dterm, allvars, vect) {
+                errMsg("Definition theorem proven expression does not match expected conclusion %d\n", j)
+                return -1
+            }
+        }
+        
+    } else {
+        for j, exp := range thm.concs {
+            if !ExactMatch(pip.pf_stack[j], exp) {
+                errMsg("Proven expression does not match expected conclusion %d\n", j)
+                return -1
+            }
         }
     }
 
@@ -1637,6 +1799,10 @@ missing_dv:
     }
 
     if fail { errMsg ("\n"); return -1 }
+
+    if defthm {
+        gh.terms[dname] = dterm
+    }
 
     // Add theorem
     gh.syms[thname] = thm
@@ -1718,28 +1884,28 @@ func DefJustMatch(proto Expression, expr Expression,
 func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
     // All of the commands currently expect *List argument.
     l := arg.asList()
-    if cmd == &gh.cmds.thm {
+    if cmd == &gh.cmds.thm || cmd == &gh.cmds.defthm {
         gh.pip.thm_name = nil
         gh.pip.vars = nil
-        ret := gh.ThmCmd(l)
+        ret := gh.ThmCmd(l, cmd == &gh.cmds.defthm)
         if ret == 0 {
             // return true below
         } else if ret == 1 {
-            errMsg("Expected 'thm (NAME ((DVAR ...) ...) ((HYPNAME HYP) ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
+            if cmd == &gh.cmds.defthm {
+                errMsg("Expected 'defthm (NAME KIND (DEFNAME ARGKIND ...) ((DVAR ...) ...) ((HYPNAME HYP) ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
+            } else {
+                errMsg("Expected 'thm (NAME ((DVAR ...) ...) ((HYPNAME HYP) ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
             return false
+            }
         } else {
             errMsg ("Proving theorem %s ...\n", gh.pip.thm_name)
             if gh.pip.vars != nil {gh.pip.Show()}
             return false
         }
-    } else if cmd == &gh.cmds.stmt || cmd == &gh.cmds.equiv {
+    } else if cmd == &gh.cmds.stmt {
         if l == nil || l.length != 4 {
         stmt_syntax:
-            if cmd == &gh.cmds.equiv {
-                errMsg("Expected 'equiv (NAME ((DVAR ...) ...) (HYP ...) (EXPR1 EXPR2))' but found\n '%s'\n", arg.String())
-            } else {
-                errMsg("Expected 'stmt (NAME ((DVAR ...) ...) (HYP ...) (CONC ...))' but found\n '%s'\n", arg.String())
-            }
+            errMsg("Expected 'stmt (NAME ((DVAR ...) ...) (HYP ...) (CONC ...))' but found\n '%s'\n", arg.String())
             return false
         }
         rem := l.head
@@ -1760,9 +1926,6 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
         rem = rem.cdr
         concl := rem.car.asList()
         if concl == nil {
-            goto stmt_syntax
-        }
-        if cmd == &gh.cmds.equiv && concl.length != 2 {
             goto stmt_syntax
         }
         s, found := gh.syms[sname]
@@ -1806,7 +1969,7 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
         vars := make([]*Variable, allvars)
         copy(vars, gh.scratch_vars)
         stmt := &Statement{sname, vars, allvars - hypvars,
-            hyps, concs, nil, nil, cmd == &gh.cmds.equiv}
+            hyps, concs, nil, nil}
         if dvarl.head != nil {
             if !gh.DvarsAdd(stmt, varmap, dvarl) {
                 return false
@@ -1815,194 +1978,6 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
         gh.syms[sname] = stmt
         if gh.verbose != 0 {
             fmt.Printf("%s %s\n", cmd, sname)
-        }
-
-    } else if cmd == &gh.cmds.def {
-        if l == nil || l.length < 2 || l.length > 3 {
-        def_syntax:
-            errMsg(
-                "Expected 'def ((DEFNAME ARGVAR ...) TERMEXPR [DEFPROOF])'.\n")
-            return false
-        }
-        rem := l.head
-        defl := rem.car.asList()  // definiendum
-        nargs := defl.length - 1
-        if defl == nil || nargs < 0 { goto def_syntax }
-        dname := defl.head.car.asAtom()
-        if dname == nil { goto def_syntax }
-
-        // We require that the definiens be a term expression, not a variable.
-        // This is to prevent defining, say, def ((ident x) x) and then
-        // using expressions like (A. (ident x) ph).  They are probably not
-        // harmful, but are ugly.
-        rem = rem.cdr
-        rhsl := rem.car.asList()
-        if rhsl == nil { goto def_syntax }
-        rem = rem.cdr
-
-        _, found := gh.terms[dname]
-        if found {
-            errMsg ("A term of name %s already exists.\n", *dname)
-            return false
-    	}
-
-        argkinds := make([]*Kind, nargs)
-        varmap := make(map[*Atom] *IVar, nargs + 1)
-        gh.scratch_vars = gh.scratch_vars[0:0]
-
-        j := 0
-        for varl := defl.head.cdr; varl != nil; varl = varl.cdr {
-            vname := varl.car.asAtom()
-            if vname == nil { goto def_syntax }
-
-            _, found := varmap[vname]
-            if found {
-                errMsg ("Repeated definition argument '%s'\n", *vname)
-                return false
-            }
-
-            s, found := gh.syms[vname]
-            if !found {
-                errMsg ("Unknown variable '%s'\n", vname)
-                return false
-            }
-            v := s.asVar()
-            if v == nil {
-                errMsg ("Symbol '%s' is not a variable.\n", s.name_of())
-                return false
-            }
-
-            gh.AddVar (v, varmap)
-            argkinds[j] = v.kind
-            j++
-        }
-
-        e := gh.MakeExpr(rhsl, varmap)
-        if e == nil {
-            errMsg("Invalid definiens expression '%s'\n", rhsl)
-            goto def_syntax
-        }
-
-        // Check that every argument variable of the definiendum occurs
-        // in the definiens
-
-        for j = 0; j < nargs; j++ {
-            if !OccursIn(j, e, nil) {
-                errMsg ("Definition '%s' argument '%s' does not appear in the definiens.\n", dname, gh.scratch_vars[j].name)
-                return false
-            }
-        }
-
-        k := e.kind_of()
-        d := &Term{k, dname, argkinds, e, len(varmap) - nargs}
-
-        // If the definiens has dummy variables, check equivalence proof
-
-        if d.nDummies != 0 {
-            if rem == nil || rem.car.asList() == nil {
-                errMsg("The definition '%s' has dummy variables, and " +
-                       "requires an equivalence proof.\n", dname)
-                return false
-            }
-            // TODO: set up for proof. Note, a definition proof has
-            // no hypotheses, must end with an equivalence statement,
-            // with exactly two 'conclusion' expressions left on the proof
-            // stack.
-            // The first of those expressions must exactly match the definiens.
-            // The second must be the definiens with each of its dummy
-            // variables replaced with a different fresh variable of the
-            // same kind.
-
-            pip := &gh.pip
-            pip.Init(gh.scratch_vars[0:nargs], nil, varmap)
-            pip.allowEquiv = true
-
-            for rem = rem.car.asList().head; rem != nil; rem = rem.cdr {
-                if pip.equivDone {
-                    errMsg("An equivalence statement may be applied only at" +
-                           "the very end of a definition justification " +
-                           "proof. But a proof step followed the " +
-                           "equivalence application.")
-
-                def_proof_fail:
-                    pip.Show()
-                    return false
-                }
-                pfa := rem.car.asAtom()
-                if pfa != nil {
-                    // A definition proof has no hypotheses
-                    // Now check for a variable ocurring in the hypotheses
-                    // or conclusions
-                    iv, found := varmap[pfa]
-                    if found {
-                        pip.PushWild(iv)
-                        continue
-                    }
-                    // General variable or stmt
-                    s, found := gh.syms[pfa]
-                    if !found {
-                        errMsg("Proof step is unknown symbol '%s'\n", pfa)
-                        goto def_proof_fail
-                    }
-                    v := s.asVar()
-                    if v != nil {
-                        // A new proof dummy variable. Add it to varmap and 
-                        // gh.scratch_vars.
-                        iv := gh.AddVar(v, varmap)
-                        pip.PushWild(iv)
-                        continue
-                    }
-
-                    stmt := s.asStmt() // must be non-nil
-                    if !pip.Apply(stmt) { goto def_proof_fail }
-                        continue
-                }
-
-                // rem.car is a list, and the proof step is a wild expression
-                e := gh.MakeExpr(rem.car, varmap)
-                if e == nil {
-                    errMsg("Bad expression proof step '%s'\n", rem.car)
-                    goto def_proof_fail
-                }
-                pip.PushWild(e)
-            }
-            if !pip.equivDone {
-                errMsg("A definition justification proof must end with " +
-                       "an equivalnce statement.\n")
-                goto def_proof_fail
-            }
-            // We know pip.wild_exprs == 0 since the proof ended with
-            // an equivalence statement application, which like any other
-            // statement application, clears pip.wild_exprs.
-            // Check that exactly two expressions remain.
-            if len(pip.pf_stack) != 2 {
-                errMsg("More than two expressions remain at the end of a" +
-                       "definition justification proof.\n")
-                goto def_proof_fail
-            }
-            if !ExactMatch(pip.pf_stack[0], d.expr) {
-                errMsg("First definition justification conclusion does not " +
-                       "exactly match definiens.\n")
-                goto def_proof_fail
-            }
-            // The definiens has nargs non-dummy variables and d.nDummies
-            // dummy variables. fwd_map maps the dummy variables in the
-            // definiens to those in the second equivalence expression
-            fwd_map := make([]int, d.nDummies)
-            for j := 0; j < d.nDummies; j++ {
-                fwd_map[j] = -1
-            }
-            if !DefJustMatch(d.expr, pip.pf_stack[1], nargs, fwd_map) {
-                errMsg ("The second definition justification conclusion " +
-                        "is not the first with the original dummy " +
-                        "variables replaced by fresh dummy variables.\n")
-                goto def_proof_fail
-            }
-        }
-
-        gh.terms[dname] = d
-        if gh.verbose != 0 {
-            fmt.Printf("def %s\n", dname)
         }
 
     } else if cmd == &gh.cmds.variable {
