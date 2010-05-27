@@ -1219,9 +1219,14 @@ func DefExprCopy(exp Expression, vect []*IVar, index *int,
         if w == nil {
            // All variables in the expression that are not arguments
            // of the matching definition term must be proof dummies.
-           if v.index < allvars { return nil }
+           if v.index < allvars {
+               errMsg ("Definition dummy occurs in hypotheses or conclusions\n")
+               return nil
+           }
            w = &IVar{v.kind, *index}
            (*index)++
+           vect[v.index] = w
+
         }
         return w
     }
@@ -1247,6 +1252,7 @@ func DefConcMatch(conc Expression, exp Expression, dterm *Term,
         return true
     } else if w != nil {
         // We don't allow definitions that expand to a variable
+        errMsg ("Cannot match %s against variable %s\n", conc, exp)
         return false 
     }
     cte := conc.asTermExpr()
@@ -1254,7 +1260,10 @@ func DefConcMatch(conc Expression, exp Expression, dterm *Term,
 
     if cte.term != dterm {
         // errMsg ("cte=%v, te=%v, cte.term=%p, te.term=%p\n", cte, te, cte.term, te.term)
-        if cte.term != te.term { return false }
+        if cte.term != te.term {
+            errMsg ("Cannot match %s against expression %s\n", conc, exp)
+            return false
+        }
         for j, sub := range cte.args {
             // errMsg ("sub=%v, te.args[j]=%v\n", sub, te.args[j])
             if !DefConcMatch(sub, te.args[j], dterm, allvars, vect) { return false }
@@ -1268,29 +1277,36 @@ func DefConcMatch(conc Expression, exp Expression, dterm *Term,
     // such variable occurs only once. Note, kind checking already occurred
     // when the conclusion was parsed.
 
-    for j = range vect {
+    for j := range vect {
         vect[j] = nil
     }
     for j, sub := range cte.args {
         v = sub.asIVar()
-        if v == nil { return false }
-        if vect[v.index] != nil { return false }
+        if v == nil {
+            errMsg ("Argument %s of term %s being defined is not a variable.\n", sub, cte)
+            return false
+        }
+        if vect[v.index] != nil {
+            errMsg ("Repeated argument variable %s in term %s being defined.\n", v, cte)
+            return false
+        }
         vect[v.index] = &IVar{v.kind, j}
     }
     index := j
     e := DefExprCopy(exp, vect, &index, allvars)
     if e == nil {
-        errMsg ("DefExprCopy returns 0\n")
         return false
     }
-
     if dterm.expr == nil {
         // This is the first match against the definition term.
         dterm.expr = e
-	dterm.nDummies = index - j
+        dterm.nDummies = index - j
         return true
     }
-    return ExactMatch(dterm.expr, e)
+    if ExactMatch(dterm.expr, e) { return true }
+
+    errMsg ("Two occurences of the term '%s' match non-equivalent expressions.\n", *dterm.name)
+    return false
 }
 
 func SubstExpr(conc Expression, subst []Expression) Expression {
@@ -1545,7 +1561,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
         if found {
             errMsg ("A term of name %s already exists.\n", *dname)
             return -1
-    	}
+        }
 
         argkinds = make([]*Kind, nargs)
         dterm = &Term{k, dname, argkinds, nil, 0}
@@ -1694,33 +1710,49 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 
     if defthm {
         // Criteria for good defthm conclusion(s) match:
-        // 1. The definition term must occur at least once in the conclusions.
-        // 2. The arguments of each occurrence of the definition term must
+        // -- The definition term must occur at least once in the conclusions.
+        // -- The arguments of each occurrence of the definition term must
         //    be simple variables, not term expressions. [Could we weaken
         //    this to say just that for at least one occurrence of the
         //    definition term, all of the arguments are variables?]
-        //    The argument variables must all occur in the expression that the
+        // -- The argument variables must all occur in the expression that the
         //    definition term occurrence substitutes for.
-        // 3  Any variables that occur in the expression substituted by
+        // -- Any variables that occur in the expression substituted by
         //    a definition term but that are not among the definition term
         //    arguments must be proof dummies (i.e. must not occur in the
         //    hypotheses or conclusions).  Such variables will correspond to
         //    definition dummy variables.
-        // 4. Each occurrence of the definition term must determine an 
+        // -- Each occurrence of the definition term must determine an 
         //    identical [Later: consistent? unifiable?] definiens, up to 1-1
         //    consistent replacement of variables.
+        //[Not this:
+        // -- Definition dummy variables within the subexpression matching one
+        //    occurrence of the definition term in the conclusions must be
+        //    distinct from the definition dummy variables occurring in
+        //    the remnant subexpression matching any other occurrence of the
+        //    definition term.
+        // because whether a term appears once or more than once in an
+        // expression is not invariant under logical equivalence: consider
+        // (<-> (true) (-> ph ph)) vs. (/\ (-> (true) (-> ph ph))
+        //                                 (-> (-> ph ph) (true)))
+        //]
         vect := make([]*IVar, len(varmap))
         for j, exp := range thm.concs {
             if !DefConcMatch(exp, pip.pf_stack[j], dterm, allvars, vect) {
-                errMsg("Definition theorem proven expression does not match expected conclusion %d\n", j)
+                errMsg("Definition theorem proven expression\n  %s\ndoes not match expected conclusion %d\n  %s\n", pip.pf_stack[j], j, exp)
                 return -1
             }
+        }
+        if dterm.expr == nil {
+            errMsg("There were no '%s' terms found in the conclusion(s).\n",
+                   *dterm.name)
+            return -1
         }
         
     } else {
         for j, exp := range thm.concs {
             if !ExactMatch(pip.pf_stack[j], exp) {
-                errMsg("Proven expression does not match expected conclusion %d\n", j)
+                errMsg("Definition theorem proven expression\n  %s\ndoes not match expected conclusion %d\n  %s\n", pip.pf_stack[j], j, exp)
                 return -1
             }
         }
