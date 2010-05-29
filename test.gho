@@ -25,6 +25,9 @@ thm (imx1 () ((1 (-> ph ps))) ((-> (-> ch ph) (-> ch ps)))
       (1 ch a1i a2i))
 thm (syl () ((1 (-> ph ps)) (2 (-> ps ch))) ((-> ph ch))
      (1 2 ph imx1 ax-mp))
+thm (ha2i () ((1 (-> ph (-> ps (-> ch th)))))
+             ((-> ph (-> (-> ps ch) (-> ps th))))
+     (1 ps ch th ax-2 syl))
 thm (imph2i () ((1 (-> (-> ph ps) ch))) ((-> ps ch))
      (ps ph ax-1 1 syl))
 thm (com12 () ((1 (-> ph (-> ps ch)))) ((-> ps (-> ph ch)))
@@ -321,6 +324,10 @@ thm (bicons () () ((-> (-> ph ps) (-> (-> ps ph) (<-> ph ps))))
 thm (biconsi () ((1 (-> ph ps)) (2 (-> ps ph))) ((<-> ph ps))
      (1 2 andi def-bi-ri))
 
+thm (hbiconsi () ((1 (-> ph (-> ps ch))) (2 (-> ph (-> ch ps))))
+       ((-> ph (<-> ps ch)))
+     (1 2 handi hdef-bi-ri))
+
 thm (hbimp1i () ((1 (-> ph (<-> ps ch)))) ((-> ph (-> ps ch)))
      (1 ps ch bimp1 syl))
 
@@ -559,6 +566,9 @@ thm (bisylt () () ((-> (<-> ph ps) (-> (<-> ps ch) (<-> ph ch))))
         h2syl andhypi
       handi hdef-bi-ri hypandi
      ))
+
+thm (bisyltp () () ((-> (<-> ph ps) (-> (<-> ch ph) (<-> ch ps))))
+     (ch ph ps bisylt com12))
 
 thm (h1bisyl () ((1 (-> ph (<-> ps ch))) (2 (<-> ch th))) 
            ((-> ph (<-> ps th)))
@@ -802,6 +812,16 @@ thm (=trans () () ((-> (= x y) (-> (= y z) (= x z))))
       syl))
 thm (=transi () ((1 (= x y)) (2 (= y z))) ((= x z))
      (2 1 x y z =trans ax-mp ax-mp))
+
+thm (a8p () () ((-> (= x z) (-> (= y z) (= x y))))
+     (y z =sym
+        x z y =trans
+      h2syl))
+
+thm (a8eq () () ((-> (= x y) (<-> (= z x) (= z y))))
+     (z x y =trans com12
+      z y x a8p com12
+      hbiconsi))
 
 thm (a8i () ((1 (= x y)) (2 (= x z))) ((= y z))
      (1 =symi 2 =transi))
@@ -1480,9 +1500,7 @@ thm (sblem1 ((x z) (x y)) () ((-> (A. x (-> (= x z) (/\ (= x y) ph)))
                        (A. x (-> (= x y) ph))))
      (
      x z y ph sblem1a he17i h=symi x ha17i
-        x y =sym
-          y x z ax-8
-        syl com12 x a5gi
+        x y z =trans com12 x a5gi
      syl
         (= x y) (= x z) (/\ (= x y) ph) sylt x a5gi ha5i
      syl impsimpi
@@ -1501,9 +1519,7 @@ thm (sblem1d ((z x)) () ((-> (-. (A. x (= x y)))
       h2syl hypandi com12
         x y x z ds2
       swap h2syl impsimpi
-        z y =sym
-          x y z =trans
-        h2syl com12
+        x y z a8p com12
           (= x y) (= x z) (/\ (= x y) ph) sylt
         syl andhypi
           (= x y) ph and2
@@ -1548,24 +1564,40 @@ thm (ax11p () () ((-> (-. (A. x (= x y)))
      ))
 
 
-thm (ex!lem1 ((w x) (w ph) (y x) (y ph)) ()
-              ((-> (E. w (A. x (<-> ph (= x w)))) (E. y (A. x (<-> ph (= x y))))))
+thm (ex!lem1 ((w x) (w ph) (y x) (y ph) (w y)) ()
+          ((-> (E. w (A. x (<-> ph (= x w)))) (E. y (A. x (<-> ph (= x y))))))
      (
-     x w ph sblem4 ...
+       y w =sym
+         w y x a8eq
+       syl
+         (= x w) (= x y) ph bisyltp
+       syl x a5gi ha5i
+         (= y w) x ax-17
+       swap syl y e5gi
+         y w ex9
+       swap ax-mp eximp1i
+         (A. x (<-> ph (= x w))) y ax-17
+       swap syl w e5gi he17i
      ))
 
 thm (ex!lem2 ((w x) (w ph) (y x) (y ph)) ()
+          ((-> (E. w (A. x (<-> ph (= x w)))) (E. y (A. x (<-> ph (= x y))))))
+     (w x ph z ex!lem1
+        z x ph y ex!lem1
+      syl))
+
+thm (ex!lem3 ((w x) (w ph) (y x) (y ph)) ()
               ((<-> (E. w (A. x (<-> ph (= x w)))) (E. y (A. x (<-> ph (= x y))))))
      (
-     w x ph y ex!lem1
-     y x ph w ex!lem1
+     w x ph y ex!lem2
+     y x ph w ex!lem2
      biconsi
      ))
 
 defthm (df-ex! wff (E! set wff) ((x y) (ph y)) () 
          ((<-> (E! x ph) (E. y (A. x (<-> ph (= x y))))))
      (
-     w x ph y ex!lem2
+     w x ph y ex!lem3
      ))
 
 # WTS (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))   <-> 
