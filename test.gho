@@ -176,6 +176,9 @@ thm (andcom () () ((-> (/\ ph ps) (/\ ps ph)))
      (ph ps and2
       ph ps and1
       handi))
+thm (handcomi () ((1 (-> ph (/\ ps ch)))) ((-> ph (/\ ch ps)))
+     (1 ps ch andcom syl))
+
 thm (andassoc1 () () ((-> (/\ ph (/\ ps ch)) (/\ (/\ ph ps) ch)))
      (ph (/\ ps ch) and1
       ph (/\ ps ch) and2 ps ch and1 syl
@@ -191,6 +194,18 @@ thm (andassoc1i () ((1 (/\ ph (/\ ps ch)))) ((/\ (/\ ph ps) ch))
      (1 both both under2 andi swap andi))
 thm (andassoc2i () ((1 (/\ (/\ ph ps) ch))) ((/\ ph (/\ ps ch)))
      (1 and1i both 1 and2i andi andi))
+
+thm (ac12 () () ((-> (/\ ph (/\ ps ch)) (/\ ps (/\ ph ch))))
+     (ph (/\ ps ch) and2
+        ps ch and1
+      syl
+        ph (/\ ps ch) and1
+          ph (/\ ps ch) and2
+            ps ch and2
+          syl
+        handi
+     handi
+     ))
 
 thm (andhypi () ((1 (-> ph (-> ps ch)))) ((-> (/\ ps ph) ch))
      (ps ph and1 ps ph and2 1 syl h2syl impsimpi))
@@ -363,6 +378,9 @@ thm (bin-f () () ((-> (<-> ph ps) (<-> (-. ph) (-. ps))))
       ph ps bimp1 ha3ri
       handi hdef-bi-ri))
 
+thm (hbin-fi () ((1 (-> ph (<-> ps ch)))) ((-> ph (<-> (-. ps) (-. ch))))
+     (1 ps ch bin-f syl))
+
 thm (bin-r () () ((-> (<-> (-. ph) (-. ps)) (<-> ph ps)))
      ((-. ph) (-. ps) bimp2 ha3i
       (-. ph) (-. ps) bimp1 ha3i
@@ -481,14 +499,65 @@ thm (pushr () ((1 (-> ph ps))) ((-> (/\ ph ch) (/\ ps ch)))
       ph ch and2
       handi))
 
+thm (ha2 () ((1 (-> ph (/\ (/\ ps ch) th)))) ((-> ph (/\ ps (/\ ch th))))
+     (1 ps ch th andassoc2 syl))
+
+thm (ha1 () ((1 (-> ph (/\ ps (/\ ch th))))) ((-> ph (/\ (/\ ps ch) th)))
+     (1 ps ch th andassoc1 syl))
+
+thm (hac () ((1 (-> ph (/\ ps (/\ ch th))))) ((-> ph (/\ ch (/\ ps th))))
+     (1 ps ch th ac12 syl))
+
+thm (hadrop () ((1 (-> ph (/\ ps ch)))) ((-> ph ch))
+     (1 ps ch and2 syl))
+
+thm (hac23 () ((1 (-> ph (/\ ps (/\ ch (/\ th ta))))))
+                 ((-> ph (/\ ps (/\ th (/\ ch ta)))))
+     (1 ch th ta ac12 ps push syl))
+
 thm (also () ((1 (-> ph ps)) (2 ch)) ((-> ph (/\ ch ps)))
      (2 ph a1i 1 handi))
 
 thm (usehyp () ((1 (-> ph ps))) ((-> ph (/\ ph ps)))
       (ph id 1 handi))
 
+thm (frame () () ((-> ph (/\ ph (true))))
+     (truth ph a1i usehyp))
+
 thm (usehypt () () ((-> (-> ph ps) (-> ph (/\ ph ps))))
      (ph ps and a2i))
+
+thm (hasplit () ((1 (-> ph (/\ ps ch)))) ((-> ph ps) (-> ph ch))
+     (1 ps ch and1 syl
+      1 ps ch and2 syl))
+
+thm (haxmp () ((1 (-> ph (/\ ps (/\ (-> ps ch) th))))) ((-> ph (/\ ch th)))
+     (1 ha1 hasplit swap hasplit a2i ax-mp swap handi))
+
+thm (haxmpr () ((1 (-> ph (/\ (-> ps ch) (/\ ps th))))) ((-> ph (/\ ch th)))
+     (1 hac haxmp))
+
+thm (hyp0 () ((1 (-> (/\ ph ps) (/\ ch th))))
+                ((-> (/\ ph ps) (/\ ph (/\ ch th))))
+     (1 usehyp ha2 hac hadrop))
+
+thm (hadl () ((1 (-> ph (/\ (/\ ps ch) th)))) ((-> ph (/\ ch th)))
+     (1 ha2 hadrop))
+
+thm (hadr () ((1 (-> ph (/\ (/\ ps ch) th)))) ((-> ph (/\ ps th)))
+     (1 ha2 hac hadrop))
+
+thm (hax1i () ((1 (-> ph (/\ ps ch)))) ((-> ph (/\ (-> th ps) ch)))
+     (1 ps th ax-1 also haxmpr))
+
+thm (hax2i () ((1 (-> ph (/\ (-> ps (-> ch th)) ta))))
+                 ((-> ph (/\ (-> (-> ps ch) (-> ps th)) ta)))
+     (1 ps ch th ax-2 also haxmpr
+     ))
+
+thm (hasyl () ((1 (-> ph (/\ (-> ps ch) (/\ (-> ch th) ta)))))
+                 ((-> ph (/\ (-> ps th) ta)))
+     (1 hac ps hax1i hax2i haxmpr))
 
 thm (bixa1 () ((1 (<-> ph ps))) ((<-> (/\ ph ch) (/\ ps ch)))
      (1 bimp1i ch pushr
@@ -640,6 +709,10 @@ thm (nax () () ((<-> (-. (A. x ph)) (E. x (-. ph))))
       bisyl
       bin1i
       ))
+
+thm (df-ax () () ((<-> (A. x ph) (-. (E. x (-. ph)))))
+     (x ph nax bin1i bisymi
+     ))
 
 thm (axex1 () () ((-> (E. x ph) (A. x (E. x ph))))
      (x ph df-ex def-bi-fi both x a5gi
@@ -1594,16 +1667,75 @@ thm (ex!lem3 ((w x) (w ph) (y x) (y ph)) ()
      biconsi
      ))
 
-defthm (df-ex! wff (E! set wff) ((x y) (ph y)) () 
+defthm (df-eu wff (E! set wff) ((x y) (ph y)) () 
          ((<-> (E! x ph) (E. y (A. x (<-> ph (= x y))))))
      (
      w x ph y ex!lem3
      ))
 
+thm (euimpex () () ((-> (E! x ph) (E. x ph)))
+     (x ph y df-eu bimp1i
+        ph (= x y) bimp2 x a5gi
+          x y ph sbaxex
+        syl
+          (= x y) ph and2 x e5gi
+        syl y e5gi
+      syl he17i
+     ))
+
+thm (exalpha1 ((ps x) (ph y)) ((1 (-> (= x y) (<-> ph ps))))
+     ((-> (E. y ps) (E. x ph)))
+     (x y ex9
+        1 hbimp2i x e5gi
+      ax-mp eximp1i
+        ps x ax-17
+      swap syl y e5gi he7i
+        y ph ex17 x e5gi
+      syl
+     ))
+
+thm (exalpha ((ps x) (ph y)) ((1 (-> (= x y) (<-> ph ps))))
+     ((<-> (E. x ph) (E. y ps)))
+     (y x =sym
+        1 hbisymi
+      syl exalpha1
+        1 exalpha1
+      biconsi
+     ))
+
+thm (axalpha ((ps x) (ph y)) ((1 (-> (= x y) (<-> ph ps))))
+     ((<-> (A. x ph) (A. y ps)))
+     (1 hbin-fi exalpha bini
+        y ps df-ax
+      bisylr2
+        x ph df-ax
+      swap bisyl))
+
+
 # WTS (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))   <-> 
 #     (-. (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph))))
 thm (sbn () () ((<-> ([/] y x (-. ph)) (-. ([/] y x ph))))
-     ((-> (= x y) (-. ph)) (= x y) and2
+     (y x (-. ph) df-sb
+      # WTS (-> (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))
+      #         (-. (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))))
+      # i.e. WTS (-> (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))
+      #              (\/ (-. (-> (= x y) ph)) (-. (E. x (/\ (= x y) ph)))))
+      # i.e. WTS (-> (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))))
+      #              (\/ (/\ (= x y) (-. ph)) (A. x (-> (= x y) (-. ph)))))
+      # Do it by cases, when (= x y) and when (-. (= x y))
+      (= x y) frame
+         (/\ (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph)))) push
+         ha2 hac hadrop hac haxmp
+         usehyp hadl ha1
+
+
+      ..
+
+      (-> (= x y) (-. ph)) (E. x (/\ (= x y) (-. ph))) and1
+        (= x y) (-. ph) ampt
+      
+
+      (-> (= x y) (-. ph)) (= x y) and2
       (= x y) (-. ph) ampt andhypi
       hnimpi
         (-> (= x y) ph) (E. x (/\ (= x y) ph)) and1 a3ri

@@ -1752,7 +1752,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
     } else {
         for j, exp := range thm.concs {
             if !ExactMatch(pip.pf_stack[j], exp) {
-                errMsg("Definition theorem proven expression\n  %s\ndoes not match expected conclusion %d\n  %s\n", pip.pf_stack[j], j, exp)
+                errMsg("Proven expression\n  %s\ndoes not match expected conclusion %d\n  %s\n", pip.pf_stack[j], j, exp)
                 return -1
             }
         }
