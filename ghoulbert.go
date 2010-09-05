@@ -1451,7 +1451,7 @@ func (pip *Pip) DvCheck(stmt *Statement) bool {
 //        < 0 some other error
 
 func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
-    if l == nil || (!defthm && l.length != 5) || (defthm && l.length != 7) {
+    if l == nil || (!defthm && l.length < 4) || (defthm && l.length < 6) {
     thm_syntax:
         return 1
     }
@@ -1483,15 +1483,13 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
     rem = rem.cdr
 
     hypl := rem.car.asList()
-    if hypl == nil { goto thm_syntax }
+    if hypl == nil || (hypl.length & 1) != 0 { goto thm_syntax }
     rem = rem.cdr
 
     concl := rem.car.asList()
     if concl == nil { goto thm_syntax }
-    rem = rem.cdr
 
-    proofl := rem.car.asList()
-    if proofl == nil { goto thm_syntax }
+    proofl := rem.cdr
 
     gh.pip.thm_name = thname
 
@@ -1511,23 +1509,17 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
     varmap := make(map[*Atom] *IVar)
     gh.scratch_vars = gh.scratch_vars[0:0]
 
-    hyps := make([]Expression, hypl.length)
-    hypnames := make([]*Atom, hypl.length)
-    hypmap := make(map[*Atom]int, hypl.length)
+    var nhyps = hypl.length / 2
+    hyps := make([]Expression, nhyps)
+    hypnames := make([]*Atom, nhyps)
+    hypmap := make(map[*Atom]int, nhyps)
 
-    // TODO: replace ((HYPNAME HYPEXPR) ...) syntax with
-    //       ({HYPNAME1 HYPEXPR1 HYPNAME2 HYPEXPR2} ... )
     j := 0
     for rem = hypl.head; rem != nil; rem = rem.cdr {
-        hpair := rem.car.asList()
-        if hpair == nil || hpair.length != 2 {
-        thm_hpair_syntax:
-            errMsg("Bad named hypothesis '%s'\n", rem.car)
-            goto thm_syntax
-        }
-        hypnam := hpair.head.car.asAtom()
+        hypnam := rem.car.asAtom()
         if hypnam == nil {
-            goto thm_hpair_syntax
+            errMsg("Expected hypothesis name, found '%s'\n", rem.car)
+            goto thm_syntax
         }
         _, found = hypmap[hypnam]
         if found {
@@ -1536,7 +1528,8 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
         }
         hypmap[hypnam] = j
         hypnames[j] = hypnam
-        e := gh.MakeExpr(hpair.head.cdr.car, varmap)
+        rem = rem.cdr
+        e := gh.MakeExpr(rem.car, varmap)
         if e == nil {
             errMsg("Bad expression %s\n", rem.car)
             return -1
@@ -1639,7 +1632,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
         for j = 0; j < bsize; j++ { pip.dv_pairs[j] = 0 }
     }
 
-    for rem = proofl.head; rem != nil; rem = rem.cdr {
+    for rem = proofl; rem != nil; rem = rem.cdr {
         pfa := rem.car.asAtom()
         if pfa != nil {
             // check first for a hypothesis name reference
@@ -1839,24 +1832,6 @@ missing_dv:
     // Add theorem
     gh.syms[thname] = thm
 
-    /*
-    space := ""
-    b1 = 0
-    fmt.Printf("thm (%s (", thname)
-    for ux = 1; ux < len(thm.dv_vars); ux++ {
-        ix = thm.dv_vars[ux]
-        for vx = 0; vx < ux; vx++ {
-            bit := b1 + vx
-            if thm.dv_bits[bit>>5] & (1<<uint32(bit&31)) == 0 { continue }
-            jx := thm.dv_vars[vx]
-            fmt.Printf("%s(%s %s)", space, vars[jx].name, vars[ix].name)
-            space = " "
-        }
-        b1 += ux
-    }
-    fmt.Printf(") %s %s %s)\n", hypl, concl, proofl)
-    */
-
     if gh.verbose != 0 {
         fmt.Printf("thm %s\n", thname)
     }
@@ -1924,9 +1899,9 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
             // return true below
         } else if ret == 1 {
             if cmd == &gh.cmds.defthm {
-                errMsg("Expected 'defthm (NAME KIND (DEFNAME ARGKIND ...) ((DVAR ...) ...) ((HYPNAME HYP) ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
+                errMsg("Expected 'defthm (NAME KIND (DEFNAME ARGKIND ...) ((DVAR ...) ...) ({HYPNAME HYP} ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
             } else {
-                errMsg("Expected 'thm (NAME ((DVAR ...) ...) ((HYPNAME HYP) ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
+                errMsg("Expected 'thm (NAME ((DVAR ...) ...) ({HYPNAME HYP} ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
             return false
             }
         } else {
