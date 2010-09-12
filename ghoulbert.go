@@ -163,7 +163,8 @@ type IVar struct {
 type Expression interface {
     kind_of() *Kind
     String() string
-    Syntax(vars []*Variable) string
+    Syntax(vars []*Variable, offset int) string
+    depth() int
     asIVar() *IVar
     asTermExpr() *TermExpr
 }
@@ -190,15 +191,40 @@ func (te *TermExpr) String() string {
     return s
 }
 
-func (te *TermExpr) Syntax(vars []*Variable) string {
-    s := "("
-    s += string(*te.term.name_of())
+func (te *TermExpr) depth() int {
+    d := 0
     for _, sub := range te.args {
-        s += " "
-        s += sub.Syntax(vars)
+        sd := sub.depth()
+        if sd > d { d = sd }
     }
-    s += ")"
-    return s
+    return (d + 1)
+}
+
+func (te *TermExpr) Syntax(vars []*Variable, offset int) string {
+    if offset < 0 {
+        s := "("
+        s += string(*te.term.name_of())
+        for _, sub := range te.args {
+            s += " "
+            s += sub.Syntax(vars, offset)
+        }
+        s += ")"
+        return s
+    }
+    d := te.depth()
+    if d <= 2 { return te.Syntax(vars, -1) }
+    // we know len(te.args) > 0, or max_depth would be 0
+    s := "(" + string(*te.term.name_of()) + " "
+    offset = offset + len(s)
+    spacer_slc := make([]byte, offset + 1)
+    spacer_slc[0] = '\n'
+    for ix := 0; ix < offset; ix++ { spacer_slc[ix + 1] = ' ' }
+    spacer := string(spacer_slc)
+    for ix, sub := range te.args {
+        if ix != 0 { s += spacer }
+        s += sub.Syntax(vars, offset)
+    }
+    return s + ")"
 }
 
 
@@ -362,13 +388,20 @@ func (pip *Pip) Show () {
     n := l - pip.wild_exprs
     vars := pip.gh.scratch_vars
     var jx int
+    var num string
+    offset := -1
+    if pip.gh.pretty_print { offset = 0 }
     for jx = 0; jx < n; jx++ {
         e := pip.pf_stack[jx]
-        errMsg("P%-2d  %s\n", jx, e.Syntax(vars))
+        num = fmt.Sprintf("P%-2d  ", jx)
+        if offset >= 0 { offset = len(num) }
+        errMsg("%s%s\n", num, e.Syntax(vars, offset))
     }
     for jx < l {
         e := pip.pf_stack[jx]
-        errMsg("W%-2d  %s\n", jx - n, e.Syntax(vars))
+        num = fmt.Sprintf("W%-2d  ", jx - n)
+        if offset >= 0 { offset = len(num) }
+        errMsg("%s%s\n", num, e.Syntax(vars, offset))
         jx++
     }
 }
@@ -407,8 +440,12 @@ func (iv *IVar) asTermExpr() *TermExpr { return nil }
 // to Variables, or something.
 func (iv *IVar) String() string { return fmt.Sprintf("#%d", iv.index) }
 
-func (iv *IVar) Syntax(vars []*Variable) string {
+func (iv *IVar) Syntax(vars []*Variable, offset int) string {
     return string(*vars[iv.index].name)
+}
+
+func (iv *IVar) depth() int {
+    return 0
 }
 
 
@@ -731,6 +768,7 @@ type Ghoulbert struct {
     dv_bmaps    [][]uint32
     pip             Pip
     verbose         uint
+    pretty_print    bool
 }
 
 func NewGhoulbert() *Ghoulbert {
@@ -2139,6 +2177,10 @@ func main() {
 
     flag.UintVar (&verbose, "v", 0, "Verbosity level.")
 
+    var pretty bool // pretty-print proof stack (etc.)
+
+    flag.BoolVar (&pretty, "p", false, "Pretty-print proof stack")
+
     flag.Parse()
 
     if flag.NArg() == 0 {
@@ -2154,6 +2196,7 @@ func main() {
     gh := NewGhoulbert()
 
     gh.verbose = verbose
+    gh.pretty_print = pretty
 
     p := NewFileParser(input, gh.intern)
 
