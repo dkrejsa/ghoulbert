@@ -688,6 +688,25 @@ thm (h1bisyl () (1 (-> ph (<-> ps ch)) 2 (<-> ch th))
      2 1 ps ch th bisylt syl hamp
      )
 
+thm (df-nimp () () ((<-> (-. (-> ph ps)) (/\ ph (-. ps))))
+    ps dneq ph bixi2 bini
+      ph (-. ps) df-and
+    bisylr2
+    )
+
+thm (df-nand () () ((<-> (-. (/\ ph ps)) (-> ph (-. ps))))
+    ph ps df-and bin2i bisymi
+)
+
+thm (nandimpi () (1 (-> (-. ph) ch) 2 (-> (-. ps) ch)) 
+                 ((-> (-. (/\ ph ps)) ch))
+
+    1 a3n1i
+    2 a3n1i
+    handi a3n1i
+)
+
+
 #################
 # Predicate calculus
 
@@ -1562,7 +1581,7 @@ thm (sbimi () (1 (-> ph ps)) ((-> ([/] y x ph) ([/] y x ps)))
         y x ph df-sb-f
       swap syl)
 
-thm (sbbii () (1 (<-> ph ps)) ((<-> ([/] y x ph) ([/] y x ps)))
+thm (bixsb () (1 (<-> ph ps)) ((<-> ([/] y x ph) ([/] y x ps)))
      1 bimp1i y x sbimi
       1 bimp2i y x sbimi
       biconsi)
@@ -1827,6 +1846,16 @@ thm (sbn () () ((<-> ([/] y x (-. ph)) (-. ([/] y x ph))))
     bisylr2
     )
 
+thm (sbex () () ((<-> ([/] y x (E. x ph)) (E. x ph)))
+    x ph df-ex y x bixsb
+      y x (A. x (-. ph)) sbn
+    bisyl
+      y x (-. ph) sbax bini
+    bisyl
+      x ph df-ex
+    bisylr2
+)
+
 thm (sbimp1a () () ((-> (/\ (= x y) (-> ph ps))
                         (->  (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))
                              (/\ (-> (= x y) ps) (E. x (/\ (= x y) ps))))))
@@ -1884,12 +1913,215 @@ thm (sbimp1 () ()
     syl
     )
 
+
+thm (sbimp2a () () 
+       ((-> (-> (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))
+                (/\ (-> (= x y) ps) (E. x (/\ (= x y) ps))))
+            (-> (= x y) (-> ph ps))))
+
+    ph (= x y) ax-1 (= x y) a1i
+      (= x y) ph and
+         (/\ (= x y) ph) x ex4
+      h1syl
+    h2andi andhypi
+      (-> (= x y) ps) (E. x (/\ (= x y) ps)) and1
+         (-> (= x y) ps) ph ax-1 com23
+      syl
+    bridge
+
+    com12 hypandi com34 com23 impsimpi com34 com12 com23 impsimpi
+    com23 com12 com23
+)
+
+thm (sbimp2b () () 
+       ((-> (-> (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))
+                (/\ (-> (= x y) ps) (E. x (/\ (= x y) ps))))
+            (E. x (/\ (= x y) (-> ph ps)))))
+
+    # Strategy: to show (a -> b) -> c, show b -> c and (-.a) -> c
+    # i.e., use imphypi. b -> c :
+    ps ph ax-1 (= x y) push x e5gi (-> (= x y) ps) a1i com12 andhypi
+
+    # (-. a) -> c where a is (d /\ e)
+    (= x y) ph df-nimp bimp1i
+      ph ps a1n (= x y) push
+    syl x he4i
+
+      x (/\ (= x y) ph) nex
+        (= x y) ph df-nand x eqax
+      bisyl bimp1i
+        ph ps a1n (= x y) imx1 x a5gi
+      syl
+        x y ex9
+          x (= x y) (-> ph ps) exusehyp
+        ax-mp
+      syl
+   nandimpi
+
+   imphypi
+)
+
 thm (sbimp2 () () 
        ((-> (-> (/\ (-> (= x y) ph) (E. x (/\ (= x y) ph)))
                 (/\ (-> (= x y) ps) (E. x (/\ (= x y) ps))))
             (/\ (-> (= x y) (-> ph ps)) (E. x (/\ (= x y) (-> ph ps))))))
+
+    x y ph ps sbimp2a
+    x y ph ps sbimp2b
+    handi
     )
 
 thm (sbimp () () ((<-> ([/] y x (-> ph ps)) (-> ([/] y x ph) ([/] y x ps))))
+
     y x (-> ph ps) df-sb
+
+    x y ph ps sbimp1
+    x y ph ps sbimp2
+    biconsi
+
+    bisyl
+
+    y x ph df-sb
+    y x ps df-sb
+    bixi
+
+    bisylr2
     )
+
+thm (sband () () ((<-> ([/] y x (/\ ph ps)) (/\ ([/] y x ph) ([/] y x ps))))
+    ph ps df-and y x bixsb
+      y x (-> ph (-. ps)) sbn
+    bisyl
+      y x ph (-. ps) sbimp
+        y x ps sbn ([/] y x ph) bixi2
+      bisyl bini
+    bisyl
+      ([/] y x ph) ([/] y x ps) df-and
+    bisylr2
+)
+
+thm (sbor () () ((<-> ([/] y x (\/ ph ps)) (\/ ([/] y x ph) ([/] y x ps))))
+    ph ps df-or y x bixsb
+      y x (-. ph) ps sbimp
+    bisyl
+      y x ph sbn ([/] y x ps) bixi1
+    bisyl
+      ([/] y x ph) ([/] y x ps) df-or
+    bisylr2
+)
+
+thm (sbbi () () ((<-> ([/] y x (<-> ph ps)) (<-> ([/] y x ph) ([/] y x ps))))
+    ph ps df-bi y x bixsb
+      y x (-> ph ps) (-> ps ph) sband
+    bisyl
+      y x ph ps sbimp
+        y x ps ph sbimp
+      bixa
+    bisyl
+      ([/] y x ph) ([/] y x ps) df-bi
+    bisylr2
+)
+
+
+thm (axsatimp () () ((-> (-> (A. x ph) (A. x ps)) 
+                         (A. x (-> (A. x ph) (A. x ps)))))
+    # Show that (A. x ps) implies (A. x (-> (A. x ph) (A. x ps))),
+    # and show that (-. (A. x ph)) implies (A. x (-> (A. x ph) (A. x ps))),
+    # then use imphypi
+    x ps axax bimp2i
+      (A. x ps) (A. x ph) ax-1 x a5gi
+    syl
+      x ph ax-6
+        (A. x ph) (A. x ps) a1n x a5gi
+      syl
+    imphypi
+)
+
+thm (aq () (1 (-> ph (A. x ph))) ((-> (-> ph (A. x ps)) (A. x (-> ph ps))))
+    ps ph ax-1 x a5gi
+      ph ps a1n x a5gi
+        1 a3ri x a5gi
+      swap syl
+        x ph ax-6
+      swap syl
+    imphypi
+      x ph ax-4 (A. x ps) imx2
+    swap syl
+    )
+
+thm (a5s1 ((x ph)) () ((-> (-> ph (A. x ps)) (A. x (-> ph ps))))
+    ph x ax-17
+    ps aq
+)
+
+thm (a5s ((x ph)) () ((<-> (-> ph (A. x ps)) (A. x (-> ph ps))))
+    ph x ps a5s1
+      x ph ps ax-5
+        ph x ax-17 (A. x ps) imx2
+      syl
+    biconsi
+)
+
+thm (a17bi ((x ph)) () ((<-> ph (A. x ph)))
+    ph x ax-17
+    x ph ax-4
+    biconsi
+)
+
+thm (axand1o ((x ph)) () ((<-> (A. x (/\ ph ps)) (/\ ph (A. x ps))))
+    x ph ps axand
+      ph x a17bi (A. x ps) bixa1
+    bisylr2
+)
+
+# Hmm, I think we also need d.v. (x y)
+# Note we could prove <-> here if we wanted
+thm (sbao_lem1 ((y z)(x z)(x y)) () ((-> (A. z (E. x (/\ (= x y) ph)))
+                                         (E. x (A. z (/\ (= x y) ph)))))
+   x y ph sblem4 bimp1i z a5gi
+     z x (-> (= x y) ph) ax-7
+   syl
+     (= x y) z ph a5s x eqax bimp2i
+   syl
+     x y (A. z ph) sblem4 bimp2i
+   syl 
+     z (= x y) ph axand1o x eqex bimp2i
+   syl
+)
+
+# (<-> ([/] x x (A. z ph)) (A. z ph))
+# (<-> ([/] y x (A. x ph)) (A. x ph))
+# (<-> ([/] y x (A. z ph)) (A. z ([/] y x ph)))  when ((x z) (y z) (x y))
+# (<-> ([/] z x (A. z ph)) (A. w ([/] y x ([/] w z ph)))) when ((w z)(w ph)(w y)(w x)(x z))
+
+# It shouldn't be necessary, but we add d.v. (x y) below to use
+# sbao_lem1 above...
+thm (sbao ((y z)(x z)(x y)) () ((<-> ([/] y x (A. z ph)) (A. z ([/] y x ph))))
+   # ->
+   y x (A. z ph) df-sb bimp1i
+     (= x y) z ph a5s1
+       z (= x y) ph axand1o x eqex bimp2i
+         x z (/\ (= x y) ph) exay
+       syl
+     join
+   syl
+     z (-> (= x y) ph) (E. x (/\ (= x y) ph)) axand bimp2i
+   syl
+     y x ph df-sb z eqax bimp2i
+   syl
+
+   # <-
+   y x ph df-sb z eqax
+     z (-> (= x y) ph) (E. x (/\ (= x y) ph)) axand
+   bisyl bimp1i
+     (= x y) z ph a5s bimp2i
+        z x y ph sbao_lem1
+          z (= x y) ph axand1o x eqex bimp1i
+        syl
+      join
+   syl
+     y x (A. z ph) df-sb bimp2i
+   syl
+
+   biconsi
+)
