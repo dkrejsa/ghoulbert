@@ -471,6 +471,24 @@ func (pip *Pip) PushWild(e Expression) {
 	pip.wild_exprs++
 }
 
+// Create a new expression formed by simultaneously substituting
+// the IVars in expression <conc> according to <subst>.
+// Used to find the substitution instance of a conclusion of
+// the theorem being applied which should be pushed on the proof stack.
+func SubstExpr(conc Expression, subst []Expression) Expression {
+	v := conc.asIVar()
+	if v != nil {
+		return subst[v.index]
+	}
+	te := conc.asTermExpr()
+	nargs := len(te.args)
+	args := make([]Expression, nargs)
+	for j, sub := range te.args {
+		args[j] = SubstExpr(sub, subst)
+	}
+	return &TermExpr{te.term, args}
+}
+
 func (pip *Pip) Apply(stmt *Statement) bool {
 
 	if stmt.wild_vars != pip.wild_exprs {
@@ -695,6 +713,7 @@ func (p *FileParser) GetRune() (rune, size int) {
 	return utf8.RuneError, 0
 }
 
+// Token type codes
 const (
 	OPEN_P = iota
 	CLOSE_P
@@ -1182,9 +1201,14 @@ func (gh *Ghoulbert) MakeExpr(syn SyntaxItem, varmap map[*Atom]*IVar) Expression
 		texpr.args[j] = e
 		j++
 	}
-	return Expression(texpr)
+	return texpr
 }
 
+// Parse & check format of distinct variables list for assertion being added.
+// Set stmt.dv_bits and stmt.dv_vars appropriately. Note that stmt.dv_vars
+// must list the indices of variables used in the statement and occurring in the
+// DV lists in increasing order of index.
+// Return true for success, false for failure
 func (gh *Ghoulbert) DvarsAdd(stmt *Statement, varmap map[*Atom]*IVar, dvarl *List) bool {
 
 	var j int = 0
@@ -1333,10 +1357,7 @@ func ExactMatch(expr1 Expression, expr2 Expression) bool {
 	if v1 != nil {
 		// These IVars() belong to the same theorem in progress;
 		// index equality also implies kind equality.
-		if v2 == nil || v1.index != v2.index {
-			return false
-		}
-		return true
+		return v1 != nil && v1.index == v2.index;
 	} else if v2 != nil {
 		return false
 	}
@@ -1405,6 +1426,7 @@ type Environ struct {
 
 // Check if the theorem variable with index ix occurs in the expression
 // expr, substituted according to the environment env.
+// Called from MatchExpand only... Dead Code?
 func OccursIn(ix int, expr Expression, env *Environ) bool {
 	te := expr.asTermExpr()
 	if te != nil {
@@ -1436,6 +1458,7 @@ func OccursIn(ix int, expr Expression, env *Environ) bool {
 // conclusion to match as necessary, checking variable usage restrictions.
 //
 // This is probably the trickiest function in the whole program.
+// TODO: It appears not to be used. Is it not needed even in defthms? Dead Code?
 //
 // env is non-nil if conc is below a definition RHS (definiens); in that case,
 // the length of env.subst is the number of argument variables occurring in
@@ -1475,14 +1498,20 @@ func MatchExpand(expr Expression, conc Expression, env *Environ) bool {
 				return true
 			}
 
-			// v is a definition dummy that hasn't been matched yet.
+			// Warning, an unpaired apostrophe/single quote in a 
+			// comment messes up the parentheses matching of
+			// go-mode!
+
+			// v is a definition dummy that has not been matched 
+			// yet.
 			// The variable w must be distinct from any variable
 			// passed down via the explicit definition term
 			// arguments, and from any other dummy variable of
 			// the current definition expansion.  We also check
 			// that the kinds of the definition dummy and the
-			// matching variable are _equivalent_. (TODO: could we
-			// get by with a subkind relation in one direction?)
+			// matching variable are _equivalent_. 
+			// TODO: could we get by with a subkind relation in
+			// one direction?
 
 			if !v.kind.IsEquivalentTo(w.kind) {
 				return false
@@ -1547,6 +1576,30 @@ func MatchExpand(expr Expression, conc Expression, env *Environ) bool {
 	return MatchExpand(expr, dt.expr, &Environ{te.args, dmap, env})
 }
 
+// Record all of the IVars occurring in <exp>, each at its own index in <vect>
+// This function is used to ensure that all the formal arguments of a defined
+// term occur in the definiens.
+func RecordVars(exp Expression, vect[]*IVar) {
+	v := exp.asIVar()
+	if v != nil {
+		vect[v.index] = v
+		return
+	}
+	te := exp.asTermExpr()
+	for _, sub := range te.args {
+		RecordVars(sub, vect)
+	}
+}
+
+// This function creates a deep copy of the expression exp, which is a sub-expression of
+// a defthm remnant matching the expansion of the term being defined (or part of it).
+// This function updates the contents of vect, adding variables and incrementing *index
+// when it does so. *index starts as the number of arguments of the definition term.
+// The slice <vect> maps variable indices in the theorem environment to new IVars whose
+// indices reflect the argument index or higher definition dummy variable index in the
+// definition term. <vect> starts out mapping only the argument variable indices, and
+// mappings for the definition dummy variables in the matching expansion are added as
+// encountered.
 func DefExprCopy(exp Expression, vect []*IVar, index *int,
 allvars int) Expression {
 	// errMsg ("exp=%v, vect=%p, index=%v, allvars=%v\n", exp, vect, index, allvars)
@@ -1581,16 +1634,26 @@ allvars int) Expression {
 	return cte
 }
 
+// This function is called to match a conclusion <conc> of a defthm
+// against the corresponding remnant expression <exp> on the proof stack.
+// <dterm> is the definition term, which will be updated with the definiens
+// when the match determines it.
+// <vect> is updated also; it forms a scratch space reused on each occurrence
+// of the definition term in a subexpression of <conc>; in each such occurrence
+// all of the term arguments must be variables (and all the variables in
+// any one occurrence distinct). <vect> maps the actual argument ivar index
+// to a new ivar whose index is the argument index in the definition term.
+// Each argument variable must occur in the matching subexpression of <exp>
+// and any other variable in the matching subexpression of <exp> must be
+// a proof dummy variable corresponding to a definition dummy variable.
+// Returns true if the match succeeds, false otherwise.
 func DefConcMatch(conc Expression, exp Expression, dterm *Term,
 allvars int, vect []*IVar) bool {
 	// errMsg ("conc=%v, exp=%v, dterm=%v, allvars=%v, vect=%p\n", conc, exp, dterm, allvars, vect)
 	v := conc.asIVar()
 	w := exp.asIVar()
 	if v != nil {
-		if w == nil || w.index != v.index {
-			return false
-		}
-		return true
+		return w != nil && w.index == v.index
 	} else if w != nil {
 		// We don't allow definitions that expand to a variable
 		errMsg("Cannot match %s against variable %s\n", conc, exp)
@@ -1616,6 +1679,7 @@ allvars int, vect []*IVar) bool {
 
 	var j int
 
+	// cte is an occurrence of the definition term.
 	// Check that all of cte's arguments are variables, and that each 
 	// such variable occurs only once. Note, kind checking already occurred
 	// when the conclusion was parsed.
@@ -1644,6 +1708,19 @@ allvars int, vect []*IVar) bool {
 		// This is the first match against the definition term.
 		dterm.expr = e
 		dterm.nDummies = index - j
+		// Check that there are no argument variables that do not occur in the expansion.
+		// (Reusing vect for a different purpose here.)
+		for j = range vect {
+			vect[j] = nil
+		}
+		RecordVars(e, vect)
+		for j = range cte.args {
+			if vect[j] == nil {
+				errMsg("Argument #%d of defined term %s does not occur in the definiens\n",
+					j, cte.term.name)
+				return false
+			}
+		}
 		return true
 	}
 	if ExactMatch(dterm.expr, e) {
@@ -1654,20 +1731,8 @@ allvars int, vect []*IVar) bool {
 	return false
 }
 
-func SubstExpr(conc Expression, subst []Expression) Expression {
-	v := conc.asIVar()
-	if v != nil {
-		return subst[v.index]
-	}
-	te := conc.asTermExpr()
-	nargs := len(te.args)
-	args := make([]Expression, nargs)
-	for j, sub := range te.args {
-		args[j] = SubstExpr(sub, subst)
-	}
-	return &TermExpr{te.term, args}
-}
-
+// Set bits in bmap corresponding to the indices of all IVars occurring
+// in expr.
 func GetVars(expr Expression, bmap []uint32) {
 
 	v := expr.asIVar()
@@ -1824,9 +1889,12 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		}
 		rem = rem.cdr
 
-		defl = rem.car.asList() // definiendum
+		defl = rem.car.asList() // definiendum with kinds instead of args
+		if defl == nil {
+			return 1
+		}
 		nargs = defl.length - 1
-		if defl == nil || nargs < 0 {
+		if nargs < 0 {
 			return 1
 		}
 		dname = defl.head.car.asAtom()
@@ -1958,6 +2026,8 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		concs[j] = e
 		j++
 	}
+
+	// The variables used in the hypotheses or conclusions
 	allvars := len(varmap)
 	vars := make([]*Variable, allvars)
 	copy(vars, gh.scratch_vars)
@@ -1979,7 +2049,8 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 	thm.hypnames = hypnames
 
 	// Add the provided DV conditions. Do this before adding any dummy vars
-	// from the proof.
+	// from the proof, since only variables occurring in the hypotheses or
+	// conclusions are allowed in DV conditions.
 	if dvarl.head != nil {
 		if !gh.DvarsAdd(&thm.Statement, varmap, dvarl) {
 			return -1
@@ -2014,7 +2085,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 				continue
 			}
 			// Now check for a variable ocurring in the hypotheses
-			// or conclusions
+			// or conclusions, or a proof dummy variable seen earlier.
 			iv, found := varmap[pfa]
 			if found {
 				pip.PushWild(iv)
@@ -2077,7 +2148,9 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		// -- The arguments of each occurrence of the definition term must
 		//    be simple variables, not term expressions. [Could we weaken
 		//    this to say just that for at least one occurrence of the
-		//    definition term, all of the arguments are variables?]
+		//    definition term, all of the arguments are variables? Or simply that
+		//    it is possible to determine a unique definiens consistent with all
+		//    occurrences?]
 		// -- The argument variables must all occur in the expression that the
 		//    definition term occurrence substitutes for.
 		// -- Any variables that occur in the expression substituted by
@@ -2095,9 +2168,13 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		//    the remnant subexpression matching any other occurrence of the
 		//    definition term.
 		// because whether a term appears once or more than once in an
-		// expression is not invariant under logical equivalence: consider
+		// expression is not invariant under logical (or even definitional) 
+		// equivalence: consider
 		// (<-> (true) (-> ph ph)) vs. (/\ (-> (true) (-> ph ph))
 		//                                 (-> (-> ph ph) (true)))
+		// (But then, how can we rule out "spooky interactions at a distance"
+		// between the same dummy variables in different occurrences of the
+		// expanded definition term?)
 		//]
 		vect := make([]*IVar, len(varmap))
 		for j, exp := range thm.concs {
@@ -2226,11 +2303,16 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 	gh.syms[thname] = thm
 
 	if gh.verbose != 0 {
-		fmt.Printf("thm %s\n", thname)
+		if defthm {
+			fmt.Printf("defthm %s\n", thname)
+		} else {
+			fmt.Printf("thm %s\n", thname)
+		}
 	}
 	return 0
 }
 
+// Dead code - for non defthm use
 func DefJustMatch(proto Expression, expr Expression,
 nargs int, fwd_map []int) bool {
 
@@ -2303,7 +2385,7 @@ func mapSyntax(arg SyntaxItem, name string) *Cons {
 	l := arg.asList()
 	if l == nil || (l.length&1) != 0 {
 		errMsg("%s must be a list with an even number of elements,\n", name)
-		errMsg("(alternating PATTERN and REPLACEMENT atoms)\n", name)
+		errMsg("(alternating PATTERN and REPLACEMENT atoms)\n")
 		return nil
 	}
 	for rem := l.head; rem != nil; rem = rem.cdr {
@@ -2334,8 +2416,8 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
 				errMsg("Expected 'defthm (NAME KIND (DEFNAME ARGKIND ...) ((DVAR ...) ...) ({HYPNAME HYP} ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
 			} else {
 				errMsg("Expected 'thm (NAME ((DVAR ...) ...) ({HYPNAME HYP} ...) (CONC ...) (STEP ...))' but found\n '%s'\n", arg)
-				return false
 			}
+			return false
 		} else {
 			errMsg("Proving theorem %s ...\n", gh.pip.thm_name)
 			if gh.pip.vars != nil {
