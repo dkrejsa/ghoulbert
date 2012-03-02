@@ -411,6 +411,9 @@ type Statement struct {
 	// Both dv_vars and dv_bits are nil if there are no distinct
 	// variables conditions
 	dv_bits []uint32
+
+	// Is the statement an axiom?
+	axiomatic  bool
 }
 
 type Theorem struct {
@@ -595,10 +598,6 @@ func (s *Statement) name_of() *Atom { return s.name }
 func (s *Statement) asStmt() *Statement { return s }
 
 func (s *Statement) asVar() *Variable { return nil }
-
-func (s *Statement) asThm() *Theorem { return nil }
-
-func (t *Theorem) asThm() *Theorem { return t }
 
 func (v *Variable) kind_of() *Kind { return v.kind }
 
@@ -960,6 +959,7 @@ type GhoulbertGlobal struct {
 	cmds   CommandList
 	intern map[string]*Atom
 	ghmap  map[string]*Ghoulbert
+	opaque *TermExpr  // fake, opaque definiens expression for imported defined terms
 }
 
 func newGhoulbertGlobal() *GhoulbertGlobal {
@@ -990,6 +990,8 @@ func newGhoulbertGlobal() *GhoulbertGlobal {
 	glob.intern = intern
 
 	glob.ghmap = make(map[string]*Ghoulbert, 10)
+
+	glob.opaque = &TermExpr{nil, nil}
 
 	return glob
 }
@@ -1050,7 +1052,7 @@ func (glob *GhoulbertGlobal) GhoulbertForUrl(basedir string, url string, verbose
 		}
 	}
 
-	gh = NewGhoulbert(glob, basedir)
+	gh = NewGhoulbert(glob, basedir, fullpath)
 
 	gh.verbose = verbose
 	gh.pretty_print = pretty
@@ -1082,10 +1084,11 @@ type Ghoulbert struct {
 	verbose         uint
 	pretty_print    bool
 	basedir	        string
+	fullpath	string
 	complete	bool
 }
 
-func NewGhoulbert(glob *GhoulbertGlobal, basedir string) *Ghoulbert {
+func NewGhoulbert(glob *GhoulbertGlobal, basedir string, fullpath string) *Ghoulbert {
 	gh := new(Ghoulbert)
 	gh.glob = glob
 
@@ -1099,9 +1102,54 @@ func NewGhoulbert(glob *GhoulbertGlobal, basedir string) *Ghoulbert {
 	gh.pip.pf_stack = make([]Expression, 128)
 	gh.pip.wild_exprs = 0
 	gh.basedir = basedir
+	gh.fullpath = fullpath
 	gh.complete = false
 	return gh
 }
+
+// This structure maintains the state of an import of one Ghoulbert file by
+// another, for the duration of the import.
+// To begin with, we'll follow the strategy of translating all imported
+// assertions from the import context into new native assertions in the
+// importing context, rather than trying to share any structure between the
+// Statement objects.  This will increase memory usage for assertions by
+// a factor of the number of times a given context is imported; but may
+// be simpler.
+
+// OK, this also implies that if module A imports module B and module C,
+// where module C also imports module B, module A already has various
+// assertions from module B when module C is imported. If an assertion
+// of module C that comes from module B gets imported into module A, then
+// if it has a new name in module A, it will just have essentially duplicate
+// content. On the other hand, if it has the same name as an assertion
+// already imported from B, the proof checker must check that the new
+// assertion being imported is _equivalent_ in some appropriate sense
+// to the one already visible in A.
+
+// Or, we could simply say that if we try to import a (non-axiomatic) 
+// assertion with a name that already exists in the importing context, we
+// just don't import that one -- ignore it, possibly logging a warning.
+// That would be simpler.
+
+// It might be a better strategy, leading to better performance, for module
+// A to import only module C, and get all the module B stuff indirectly from
+// module C.
+
+// Of course, all Axioms of an imported context must be mapped to an equivalent
+// assertion (either axiomatic or already proven) in the importing context.
+// (Since Axioms from the imported context must be treated differently from 
+// proven theorems of the imported context, would it make sense to use a
+// separate mapping for them?)
+
+type GhImport struct {
+	gh		*Ghoulbert  // The importing context
+	gh_imp		*Ghoulbert  // The imported context
+
+	kmap		map[*Kind]*Kind  // Map from kinds of gh_imp to kinds of gh
+	tmap		map[*Term]*Term  // Map from terms of gh_imp to terms of gh
+	vmap		map[*Variable]*Variable // Map from vars of gh_imp to vars of gh
+}
+
 
 func (gh *Ghoulbert) AddVar(v *Variable, varmap map[*Atom]*IVar) *IVar {
 	j := len(gh.scratch_vars)
@@ -1423,158 +1471,6 @@ type Environ struct {
 	up       *Environ // parent environment
 }
 
-
-// Check if the theorem variable with index ix occurs in the expression
-// expr, substituted according to the environment env.
-// Called from MatchExpand only... Dead Code?
-func OccursIn(ix int, expr Expression, env *Environ) bool {
-	te := expr.asTermExpr()
-	if te != nil {
-		for _, e := range te.args {
-			if OccursIn(ix, e, env) {
-				return true
-			}
-		}
-		return false
-	}
-	// expr is an IVar
-	v := expr.asIVar()
-	if env != nil {
-		vix := v.index
-		if vix < len(env.subst) {
-			return OccursIn(ix, env.subst[vix], env.up)
-		}
-		// TODO: is this right?
-		if env.dummymap[vix] >= 0 && vix == ix {
-			return true
-		}
-		return false
-	}
-	return (v.index == ix)
-}
-
-// Match proof-stack remnant expression 'expr' against expected conclusion
-// expression (or sub-expression) 'conc'. Expand definitions in expected
-// conclusion to match as necessary, checking variable usage restrictions.
-//
-// This is probably the trickiest function in the whole program.
-// TODO: It appears not to be used. Is it not needed even in defthms? Dead Code?
-//
-// env is non-nil if conc is below a definition RHS (definiens); in that case,
-// the length of env.subst is the number of argument variables occurring in
-// the definiens; and the length of env.dummymap
-// Returns true if match succeeds, false otherwise.
-// Note that this function may modify the target of a non-null 'env'
-// passed to it.
-func MatchExpand(expr Expression, conc Expression, env *Environ) bool {
-
-	v := conc.asIVar()
-	if v != nil {
-		if env != nil {
-			ix := v.index
-			if ix < len(env.subst) {
-				// v is a definition argument variable, find its substitution
-				vv := env.subst[ix] // vv is non-nil
-				// match expr against vv with parent environment
-				return MatchExpand(expr, vv, env.up)
-			}
-
-			// v corresponds to a definition dummy. expr must be
-			// a variable to match.
-
-			w := expr.asIVar()
-			if w == nil {
-				return false
-			}
-
-			ix -= len(env.subst)
-			jx := env.dummymap[ix]
-			wix := w.index
-			if jx >= 0 {
-				// v is already mapped, must match exactly.
-				if wix != jx {
-					return false
-				}
-				return true
-			}
-
-			// Warning, an unpaired apostrophe/single quote in a 
-			// comment messes up the parentheses matching of
-			// go-mode!
-
-			// v is a definition dummy that has not been matched 
-			// yet.
-			// The variable w must be distinct from any variable
-			// passed down via the explicit definition term
-			// arguments, and from any other dummy variable of
-			// the current definition expansion.  We also check
-			// that the kinds of the definition dummy and the
-			// matching variable are _equivalent_. 
-			// TODO: could we get by with a subkind relation in
-			// one direction?
-
-			if !v.kind.IsEquivalentTo(w.kind) {
-				return false
-			}
-
-			for _, n := range env.dummymap {
-				if n >= 0 && n == wix {
-					return false
-				}
-			}
-
-			for _, e := range env.subst {
-				if e != nil && OccursIn(wix, e, env.up) {
-					return false
-				}
-			}
-			env.dummymap[ix] = wix
-			return true
-		}
-		w := expr.asIVar()
-		if w == nil {
-			return false
-		}
-		if v.index != w.index {
-			return false
-		}
-		return true
-	}
-	// conc is a termExpr. Since we restrict every definiens to be a
-	// term expresion, expr must be a termExpr also even if conc is a
-	// definition term. Unless conc is a definition term, the two terms
-	// must be the same.
-	te := conc.asTermExpr()
-	ete := expr.asTermExpr()
-	if ete == nil {
-		return false
-	}
-
-	// Note, term equality implies the argument numbers and kinds match;
-	// that checking is done when the expressions are constructed from
-	// syntax.  If the terms match, we don't have to expand conc,
-	// and the arguments should match also.
-	if te.term == ete.term {
-		for j, subExp := range te.args {
-			if !MatchExpand(ete.args[j], subExp, env) {
-				return false
-			}
-		}
-		return true
-	}
-
-	dt := te.term
-	if dt.expr == nil {
-		return false
-	} // not a definition
-
-	var dmap []int
-	if dt.nDummies != 0 {
-		dmap = make([]int, dt.nDummies)
-	}
-
-	return MatchExpand(expr, dt.expr, &Environ{te.args, dmap, env})
-}
 
 // Record all of the IVars occurring in <exp>, each at its own index in <vect>
 // This function is used to ensure that all the formal arguments of a defined
@@ -2045,6 +1941,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 	thm.concs = concs
 	thm.dv_vars = nil
 	thm.dv_bits = nil
+	thm.axiomatic = false
 
 	thm.hypnames = hypnames
 
@@ -2312,92 +2209,535 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 	return 0
 }
 
-// Dead code - for non defthm use
-func DefJustMatch(proto Expression, expr Expression,
-nargs int, fwd_map []int) bool {
-
-	// errMsg("proto=%s, expr=%s, nargs=%d, fwd_map=%v\n",
-	//        proto, expr, nargs, fwd_map)
-	pte := proto.asTermExpr()
-	if pte != nil {
-		te := expr.asTermExpr()
-		if te == nil {
-			return false
-		}
-		if pte.term != te.term {
-			return false
-		}
-		for j, arg := range pte.args {
-			if !DefJustMatch(arg, te.args[j], nargs, fwd_map) {
-				return false
-			}
-		}
-		return true
-	}
-	piv := proto.asIVar() // must be an IVar
-	iv := expr.asIVar()
-	if iv == nil {
-		return false
-	}
-	if piv.index < nargs {
-		// nondummy variables must match exactly
-		if iv.index != piv.index {
-			return false
-		}
-		return true
-	}
-	// Note, nargs <= piv.index < nargs + len(fwd_map).
-	// Both piv and iv must be dummy variables to match. Also, iv must
-	// not be one of the dummies in the original definiens.
-	if iv.index < nargs+len(fwd_map) {
-		return false
-	}
-
-	// check if this dummy position is already matched
-	x := fwd_map[piv.index-nargs]
-	if x >= 0 {
-		// yes it was; match must be the same this time
-		if x != iv.index {
-			return false
-		}
-		return true
-	}
-
-	// Not matched yet.
-	// variable kinds must be equivalent (not just subkind) for dummy match
-	if !piv.kind.IsEquivalentTo(iv.kind) {
-		return false
-	}
-
-	// iv must not have been matched previously.
-	for _, x = range fwd_map {
-		// note iv.index >= 0, so OK if x == -1 here
-		if x == iv.index {
-			return false
-		}
-	}
-	// record match
-	fwd_map[piv.index-nargs] = iv.index
-	return true
+type PatRep struct {
+	ps  string  // prefix + suffix of pattern/replacement
+	wix int     // prefix length of pattern/replacement. -1 if no wildcard.
 }
 
-func mapSyntax(arg SyntaxItem, name string) *Cons {
+func mapSyntax(arg SyntaxItem, name string) []PatRep {
 	l := arg.asList()
 	if l == nil || (l.length&1) != 0 {
 		errMsg("%s must be a list with an even number of elements,\n", name)
 		errMsg("(alternating PATTERN and REPLACEMENT atoms)\n")
 		return nil
 	}
+
+	var wix int
+	var word *Atom
+
+	mvec := make([]PatRep, l.length)
+	pix := 0
+
 	for rem := l.head; rem != nil; rem = rem.cdr {
-		if rem.car.asAtom() == nil {
+		word = rem.car.asAtom()
+		if word == nil {
 			errMsg("Elements of %s must be atoms.\n", name)
 			return nil
 		}
-		// Check for at most a single undoubled '$' character later...
+		// Check for at most a single undoubled '$' character
+		wix = -1
+		wl := len(*word)
+		ps := ""
+		for jx := 0; jx < wl; jx++ {
+			c := (*word)[jx]
+			if c != '$' { ps += string(c) ; continue }
+			if jx < wl - 1 && (*word)[jx+1] == '$' {
+				// doubled (quoted) '$'
+				ps += string(c)
+				jx++
+				continue
+			}
+			if wix != -1 {
+				// Check for "$DROP$" special case in REP
+				if (pix&1) != 0 && *word == "$DROP$" {
+					ps = ""
+					wix = -1
+					break
+				}
+				errMsg("More than one unquoted '$' character occurs in PATTERN or REPLACEMENT %s", word)
+				return nil
+			}
+			wix = len(ps)
+		}
+		mvec[pix].ps = ps
+		mvec[pix].wix = wix
+		// Check that if the REPLACEMENT has a wildcard, the PATTERN
+		// does too; but not vice-versa.
+		if wix != -1 && (pix&1) != 0 && mvec[pix-1].wix == -1 {
+			errMsg("Replacement %s has '$' but corresponding pattern does not\n", word)
+			return nil
+		}
+		pix++
 	}
-	return l.head
+
+	return mvec
 }
 
+// <pr> is an alternating slice of PATTERN and REPLACEMENT PatReps
+// <name> is the name to be mapped according to the sequence of
+// PATTERNs and REPLACEMENTs.
+// Interns the resulting atom.
+func (glob *GhoulbertGlobal) MapIt (pr []PatRep, name string) *Atom {
+
+	// Ugh -- lots of strings created & destroyed; this is a garbage
+	// collector workout and probably hurts performance and locality.
+	npr := len(pr)
+	for ix := 0; ix < npr; ix += 2 {
+		pat := pr[ix]
+		rep := pr[ix+1]
+		wix := pat.wix
+		if wix == -1 {
+			if pat.ps != name { continue }
+			// rep.wix == -1 also, checked in mapSyntax()
+			name = rep.ps
+			if name == "" { return nil }
+			continue
+		}
+		// name must be longer than pat.ps to match.
+		// (We do not allow zero-length wildcards.)
+		ln := len(name)
+		lp := len(pat.ps)
+		if ln <= lp { continue }
+		// Check that prefix and suffix of pattern match.
+		nsi := ln - (lp - wix) // name suffix index
+		if name[:wix] != pat.ps[:wix] { continue }
+		if name[nsi:] != pat.ps[wix:] { continue }
+		// OK, we match; construct the replacement name
+		rwix := rep.wix
+		if rwix == -1 {
+			name = rep.ps  // also handles drop ("") case
+			if name == "" { return nil }
+		} else {
+			name = rep.ps[:rwix] + name[wix:nsi] + rep.ps[rwix:]
+		}
+	}
+
+	a, found := glob.intern[name]
+	if found {
+		return a
+	}
+	aa := Atom(name)
+	glob.intern[name] = &aa
+
+	return a
+}
+
+func (ghi *GhImport) ImportKinds(kmap []PatRep) bool {
+
+	gh := ghi.gh
+	glob := gh.glob
+
+	gh_imp := ghi.gh_imp
+
+	klen := len(gh_imp.kinds)
+
+	kvec := make([]*Kind, klen)
+
+	km := make(map[*Kind]*Kind, klen)
+	kminv := make(map[*Kind]*Kind, klen)
+
+	jx := 0
+
+	for kname, k := range gh_imp.kinds {
+
+		kvec[jx] = k
+		jx++
+
+		knameLocal := glob.MapIt(kmap, string(*kname))
+		if knameLocal == nil {
+			errMsg("Kind '%s' imported from %s is unmapped\n", kname, gh_imp.fullpath)
+			return false
+		}
+		kLocal := gh.kinds[knameLocal]
+		if kLocal == nil {
+			errMsg("Kind '%s' imported from %s is mapped to nonexistent kind '%s'\n",
+				kname, gh_imp.fullpath, knameLocal)
+			return false
+		}
+		km[k] = kLocal
+		kremap := kminv[kLocal]
+		if kremap != nil {
+			// We allow two equivalent kinds to be mapped to the same kind
+			if !k.IsEquivalentTo (kremap) {
+				errMsg("Inequivalent kinds '%s' and '%s' from %s are both mapped to '%s'\n",
+					kname, kremap.name, gh_imp.fullpath, knameLocal)
+				return false
+			}
+		} else {
+			kminv[kLocal] = k
+		}
+	}
+	// Now check that k1 is a subkind of k2 in gh_imp.kinds if and only if
+	// km[k1] is a subkind of km[k2]
+
+	for ix := 1; ix < klen; ix++ {
+		ki := kvec[ix]
+		for jx := 0; jx < ix; jx++ {
+			kj := kvec[jx]
+			if (ki.isSubkindOf(kj) != km[ki].isSubkindOf(km[kj]) ||
+			    kj.isSubkindOf(ki) != km[kj].isSubkindOf(km[ki])) {
+				errMsg("Subkind relation is not invariant mapping kinds '%s' and '%s' to '%s' and '%s'\n",
+					ki, kj, km[ki], km[kj])
+				return false
+			}
+		}
+	}
+
+	ghi.kmap = km
+	kminv = nil  // hint to gc
+	return true
+}
+
+// Map each variable from the imported context to a variable of the same kind
+// in the importing context. Verify that the mapping is injective.
+//
+// It is awkward to need to do this; we could get away without it except for
+// human-interface issues about naming/displaying the varibles in imported
+// assertions. [We could display an imported assertion using the variables
+// from the imported module, however the variables might have different kinds
+// and this could confuse the user.]
+func (ghi *GhImport) ImportVars(vmap []PatRep) bool {
+
+	gh := ghi.gh
+	glob := gh.glob
+	gh_imp := ghi.gh_imp
+
+	vm := make(map[*Variable]*Variable)
+	vminv := make(map[*Variable]*Variable)
+
+	for vname, s := range gh_imp.syms {
+		v := s.asVar()
+		if v == nil { continue }
+
+		vnameLocal := glob.MapIt(vmap, string(*vname))
+		if vnameLocal == nil {
+			errMsg("Variable %s imported from %s is unmapped\n", 
+				vname, gh_imp.fullpath)
+			return false
+		}
+		sLocal, found := gh.syms[vnameLocal]
+		if !found {
+			errMsg("Variable %s imported from %s is mapped to nonexistent Variable %s\n",
+				vname, gh_imp.fullpath, vnameLocal)
+			return false
+		}
+		vLocal := sLocal.asVar()
+		if vLocal == nil {
+			errMsg("Variable %s imported from %s is mapped to an assertion %s\n",
+				vname, gh_imp.fullpath, vnameLocal)
+			return false
+		}
+		if vminv[vLocal] != nil {
+			errMsg("Variables %s and %s imported from %s are both mapped to %s\n",
+				vname, vminv[vLocal].name, gh_imp.fullpath, vnameLocal)
+			return false
+		}
+		if !vLocal.kind.IsEquivalentTo(ghi.kmap[v.kind]) {
+			errMsg("Variable %s imported from %s is mapped to variable %s of the wrong kind\n", vname, gh_imp.fullpath, vnameLocal)
+			return false
+		}
+		vm[v] = vLocal
+		vminv[vLocal] = v
+	}
+
+	ghi.vmap = vm
+	vminv = nil  // hint to gc
+
+	return true
+}
+
+func (ghi *GhImport) ImportTerms(tmap []PatRep) bool {
+
+	gh := ghi.gh
+	glob := gh.glob
+	gh_imp := ghi.gh_imp
+
+	tm := make(map[*Term]*Term)
+	tminv := make(map[*Term]*Term)
+
+	for tname, t := range gh_imp.terms {
+
+		tnameLocal := glob.MapIt(tmap, string(*tname))
+		if tnameLocal == nil {
+			// For now, we require that all terms in the imported
+			// context be mapped, to avoid issues with imported
+			// assertions referring to unmapped terms. May want to
+			// relax this later.
+			errMsg("Term %s imported from %s is unmapped\n", 
+				tname, gh_imp.fullpath)
+			return false
+		}
+		tLocal, found := gh.terms[tnameLocal]
+		if !found {
+			// 'Axiomatic' terms, i.e. undefined terms, must
+			// be mapped to a term in the importing context.
+			if t.expr == nil {
+
+				errMsg("Term '%s' imported from %s is mapped to nonexistent term '%s'\n",
+					tname, gh_imp.fullpath, tnameLocal)
+				return false
+			}
+			// A term _defined_ in the imported context need
+			// not exist yet in the importing context.
+			// We import such defined terms with opaquified definienses, since
+			// indirectly imported terms might otherwise look 'axiomatic'.
+			// [Note that the 'expr' member of a defined term is not really used
+			// after the defthm is proven, other than to mark the term as 
+			// optional in imports. We might consider omitting it.]
+			// Note that the 1-1 check below prevents such an added
+			// term from being the target of a later-mapped 
+			// axiomatic term.
+			ak := make([]*Kind, len (t.argkinds))
+			for i, k := range t.argkinds {
+				ak[i] = ghi.kmap[k]
+			}
+			tLocal = &Term{ghi.kmap[t.kind], tnameLocal, ak, glob.opaque, 0}
+			gh.terms[tnameLocal] = tLocal
+			tm[t] = tLocal
+			tminv[tLocal] = t
+			continue
+		}
+		if tminv[tLocal] != nil {
+			// We disallow non-injective mappings; terms of the
+			// same signature in general do not have the same
+			// semantics. Consider /\ and \/.  If we had a notion
+			// of term equality, we might allow it in that case;
+			// but we don not.
+			errMsg("Terms '%s' and '%s' imported from %s are both mapped to '%s'\n", tname, tminv[tLocal].name, gh_imp.fullpath, tnameLocal)
+			return false
+		}
+		// OK, now check that the mapped term has appropriate
+		// result and argument kinds.
+		if !tLocal.kind.IsEquivalentTo(ghi.kmap[t.kind]) {
+			errMsg("Term '%s' imported from %s is mapped to term '%s', which has the wrong result kind\n", tname, gh_imp.fullpath, tnameLocal)
+			return false
+		}
+		if len(tLocal.argkinds) != len(t.argkinds) {
+			errMsg("Term '%s' imported from %s is mapped to term '%s', which has different arity\n", tname, gh_imp.fullpath, tnameLocal)
+			return false
+		}
+		for ix, ak := range tLocal.argkinds {
+			if ak.IsEquivalentTo(ghi.kmap[t.argkinds[ix]]) { continue }
+			errMsg("Term '%s' imported from %s is mapped to term '%s', which has the wrong kind for argument %d\n", tname, gh_imp.fullpath, tnameLocal, ix)
+			return false
+		}
+		tm[t] = tLocal
+		tminv[tLocal] = t
+	}
+
+	// TODO - FIXME - Handle definition terms
+	ghi.tmap = tm
+	tminv = nil  // gc hint
+
+	return true
+}
+
+func (ghi *GhImport) ImportAssertions(amap []PatRep) bool {
+
+	gh := ghi.gh
+	glob := gh.glob
+	gh_imp := ghi.gh_imp
+
+	for sname, s := range gh_imp.syms {
+		stmt := s.asStmt()
+		if stmt == nil { continue } // skip variables
+
+		// On the first pass, only check axioms
+		if !stmt.axiomatic { continue }
+
+		snameLocal := glob.MapIt(amap, string(*sname))
+		if snameLocal == nil {
+			errMsg("Axiom %s imported from %s is unmapped\n", 
+				sname, gh_imp.fullpath)
+			return false
+		}
+		sLocal, found := gh.syms[snameLocal]
+		if !found {
+			errMsg("Axiom %s imported from %s is mapped to nonexistent symbol %s\n",
+				sname, gh_imp.fullpath, snameLocal)
+			return false
+		}
+		stmtLocal := sLocal.asStmt()
+		if stmtLocal == nil {
+			errMsg("Axiom %s imported from %s is mapped to a variable %s\n",
+				sname, gh_imp.fullpath, snameLocal)
+			return false
+		}
+		// Note, we allow non-injective mappings of axioms (or indeed
+		// any assertion) since for assertions we care about the
+		// assertion structure (which we check matches), not the
+		// assertion name.
+
+		if !ghi.assertionMatch(stmtLocal, stmt) { return false }
+	}
+
+	// Pass 2: handle non-axiomatic assertions.
+	for sname, s := range gh_imp.syms {
+		stmt := s.asStmt()
+		if stmt == nil { continue } // skip variables
+
+		// On the 2nd pass, only check non-axioms
+		if stmt.axiomatic { continue }
+
+		snameLocal := glob.MapIt(amap, string(*sname))
+
+		// drop unmapped (non-axiomatic) assertions
+		if snameLocal == nil { continue }
+
+		sLocal, found := gh.syms[snameLocal]
+		if !found {
+			// Add the mapped assertion to gh
+			nvars := len(stmt.vars)
+			varsloc := make([]*Variable, nvars)
+			for ix, v := range stmt.vars {
+				varsloc[ix] = ghi.vmap[v]
+			}
+			nhyps := len(stmt.hyps)
+			hypsloc := make([]Expression, nhyps)
+			for ix, exp := range stmt.hyps {
+				hypsloc[ix] = ghi.exprMap(exp)
+			}
+			nconcs := len(stmt.concs)
+			concsloc := make([]Expression, nconcs)
+			for ix, exp := range stmt.concs {
+				concsloc[ix] = ghi.exprMap(exp)
+			}
+			sloc := &Statement{
+				snameLocal,
+				varsloc, 
+				stmt.wild_vars,
+				hypsloc,
+				concsloc,
+				stmt.dv_vars,  // can share
+				stmt.dv_bits,  // can share
+				false }
+			gh.syms[snameLocal] = sloc
+			continue
+		}
+		stmtLocal := sLocal.asStmt()
+		if stmtLocal == nil {
+			errMsg("Statement %s imported from %s is mapped to a variable %s\n",
+				sname, gh_imp.fullpath, snameLocal)
+			return false
+		}
+		// Note, we allow non-injective mappings of axioms (or indeed
+		// any assertion) since for assertions we care about the
+		// assertion structure (which we check matches), not the
+		// assertion name.
+
+		if !ghi.assertionMatch(stmtLocal, stmt) { return false }
+	}
+	return true
+}
+
+// e is an expression from the imported context ghi.gh_imp .
+// Create a corresponding mapped expression for the importing context ghi.gh .
+func (ghi *GhImport) exprMap(e Expression) Expression {
+	v := e.asIVar()
+	if v != nil {
+		return &IVar{ghi.kmap[v.kind], v.index}
+	}
+	te := e.asTermExpr()
+	nargs := len(te.args)
+	args := make([]Expression, nargs)
+	for ix, exp := range te.args {
+		args[ix] = ghi.exprMap(exp)
+	}
+	return &TermExpr{ghi.tmap[te.term], args}
+}
+
+// Does the expression e from the imported context match the expression
+// eloc in the importing context to which it is mapped?
+func (ghi *GhImport) exprMatch(eloc Expression, e Expression) bool {
+	v := e.asIVar()
+	if v != nil {
+		vloc := eloc.asIVar()
+		return (vloc != nil && v.index == vloc.index)
+	}
+	te := e.asTermExpr()
+	teloc := eloc.asTermExpr()
+	if teloc == nil { return false }
+
+	if teloc.term != ghi.tmap[te.term] { return false }
+
+	for ix, exp := range te.args {
+		if !ghi.exprMatch(teloc.args[ix], exp) { return false }
+	}
+	return true
+}
+
+func badDv (sloc *Statement, s *Statement) {
+	errMsg("Imported statement '%s' mapped to assertion '%s' with non-matching distinct variables conditions\n", s.name, sloc.name)
+}
+
+func (ghi *GhImport) assertionMatch (sloc *Statement, s *Statement) bool {
+
+	// Note that some of the hypotheses and conclusions may be just
+	// index variables. We check that the number of variables used in
+	// the hypotheses and conclusions is the same, and their kinds map
+	// correctly, to avoid having to check anything but the variable
+	// indices when comparing the hypotheses and conclusions.
+	// We do not, however, require that the particular variable choices
+	// be consistent with the global variable mapping determined in
+	// ghi.vmap, so long as the kinds are OK.
+
+	nvars := len(s.vars)
+	if len(sloc.vars) != nvars {
+		errMsg("Imported statement '%s' mapped to assertion '%s' with different number of variables\n", s.name, sloc.name)
+		return false
+	}
+	for ix, v := range s.vars {
+		if !sloc.vars[ix].kind.IsEquivalentTo(ghi.kmap[v.kind]) {
+			errMsg("Imported statement '%s' mapped to assertion '%s' with nonmatching variable kinds\n", s.name, sloc.name)
+			return false
+		}
+	}
+
+	nhyps := len(s.hyps)
+	nconcs := len(s.concs)
+	if len(sloc.hyps) != nhyps {
+		errMsg("Imported statement '%s' mapped to assertion '%s' with different number of hypotheses\n", s.name, sloc.name)
+		return false
+	}
+	if len(sloc.concs) != nconcs {
+		errMsg("Imported statement '%s' mapped to assertion '%s' with different number of conclusions\n", s.name, sloc.name)
+		return false
+	}
+	for ix, exp := range s.hyps {
+		if !ghi.exprMatch(sloc.hyps[ix], exp) {
+			errMsg("Imported statement '%s' mapped to assertion '%s' with non-matching hypothesis %d\n", s.name, sloc.name, ix)
+			return false
+		}
+	}
+	for ix, exp := range s.concs {
+		if !ghi.exprMatch(sloc.concs[ix], exp) {
+			errMsg("Imported statement '%s' mapped to assertion '%s' with non-matching conclusion %d\n", s.name, sloc.name, ix)
+			return false
+		}
+	}
+	ndv := len(s.dv_vars)
+	if len(sloc.dv_vars) != ndv {
+		badDv(sloc, s)
+		return false
+	}
+	// Note, the variables are listed in dv_vars in increasing order
+	for ix := 0; ix < ndv ; ix++ {
+		if sloc.dv_vars[ix] != s.dv_vars[ix] {
+			badDv(sloc, s)
+			return false
+		}
+	}
+	// dv_bits lengths must match since dv_vars lengths match.
+	ndvb := len(s.dv_bits)
+	for ix := 0; ix < ndvb ; ix++ {
+		if sloc.dv_bits[ix] != s.dv_bits[ix] {
+			badDv(sloc, s)
+			return false
+		}
+	}
+	return true
+}
+	
 // Handle a Ghoulbert command.  Return true if successful, false on failure
 func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
 
@@ -2490,7 +2830,7 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
 		vars := make([]*Variable, allvars)
 		copy(vars, gh.scratch_vars)
 		stmt := &Statement{sname, vars, allvars - hypvars,
-			hyps, concs, nil, nil}
+			hyps, concs, nil, nil, true}
 		if dvarl.head != nil {
 			if !gh.DvarsAdd(stmt, varmap, dvarl) {
 				return false
@@ -2665,8 +3005,12 @@ func (gh *Ghoulbert) Command(cmd *Atom, arg SyntaxItem) bool {
 		// Look up normalized url in a map to avoid reading the file
 		// more than once. Check for recursion.
 
-		gh_imp := glob.GhoulbertForUrl(string(*url), gh.basedir, 0, gh.pretty_print)
-		use(gh_imp);
+		gh_imp := glob.GhoulbertForUrl(gh.basedir, string(*url), gh.verbose, gh.pretty_print)
+
+		ghi := &GhImport{gh: gh, gh_imp: gh_imp}
+
+		return (ghi.ImportKinds(kmap) && ghi.ImportVars(vmap) &&
+			ghi.ImportTerms(tmap) && ghi.ImportAssertions(amap))
 
 	} else {
 		errMsg("Unknown command '%s'\n", *cmd)
