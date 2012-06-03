@@ -1405,7 +1405,7 @@ func ExactMatch(expr1 Expression, expr2 Expression) bool {
 	if v1 != nil {
 		// These IVars() belong to the same theorem in progress;
 		// index equality also implies kind equality.
-		return v1 != nil && v1.index == v2.index;
+		return v2 != nil && v1.index == v2.index;
 	} else if v2 != nil {
 		return false
 	}
