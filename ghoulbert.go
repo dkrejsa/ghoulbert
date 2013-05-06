@@ -205,7 +205,7 @@ import (
 	"path"
 	"path/filepath"
 	"unicode"
-	"utf8"
+	"unicode/utf8"
 )
 
 func errMsg(format string, args ...interface{}) {
@@ -669,18 +669,18 @@ func (p *FileParser) Line() int {
 	return p.line
 }
 
-func (p *FileParser) GetRune() (rune, size int) {
+func (p *FileParser) GetRune() (rune rune, size int) {
 	var ix = p.start
 	var l = p.end
 	var n int = l - ix
-	var err os.Error
+	var err error
 
 	for n < 4 && !p.eof {
 		copy(p.buf[prelude-n:prelude], p.buf[ix:l])
 		ix = prelude - n
 		n, err = p.file.Read(p.buf[prelude:])
 		if n < 0 {
-			errMsg("GetRune: Read failed. error='%s'\n", err.String())
+			errMsg("GetRune: Read failed. error='%s'\n", err.Error())
 			os.Exit(1)
 		} else if n == 0 {
 			p.eof = true
@@ -723,19 +723,20 @@ const (
 func (p *FileParser) GetToken() (code int, atom *Atom) {
 
 	atomlen := 0
-	var rune, size int
+	var rune rune
+        var size int
 
 outer_loop:
 	for {
 		rune, size = p.GetRune()
-		if rune == int('(') {
+		if rune == '(' {
 			if atomlen != 0 {
 				break
 			}
 			p.start += size
 			return OPEN_P, nil
 		}
-		if rune == int(')') {
+		if rune == ')' {
 			if atomlen != 0 {
 				break
 			}
@@ -748,18 +749,18 @@ outer_loop:
 			}
 			p.start += size
 			switch rune {
-			case int('\r'):
+			case '\r':
 				rune, size = p.GetRune()
-				if rune == int('\n') {
+				if rune == '\n' {
 					p.start += size
 				}
 				fallthrough
-			case int('\n'):
+			case '\n':
 				p.line += 1
 			}
 			continue
 		}
-		if rune == int('#') {
+		if rune == '#' {
 			if atomlen != 0 {
 				break
 			}
@@ -781,13 +782,13 @@ outer_loop:
 				// (paragraph separator) do not terminate
 				// the one-line comment nor do they increment
 				// the line number.
-				case int('\r'):
+				case '\r':
 					rune, size = p.GetRune()
-					if rune == int('\n') {
+					if rune == '\n' {
 						p.start += size
 					}
 					fallthrough
-				case int('\n'):
+				case '\n':
 					p.line += 1
 					continue outer_loop
 				}
@@ -997,7 +998,7 @@ func newGhoulbertGlobal() *GhoulbertGlobal {
 }
 
 func normalize(dir string) string {
-	var err os.Error
+	var err error
 	dir1 := path.Clean(dir)
 	dir2, err := filepath.Abs(dir1)
 	if err != nil {
@@ -1015,7 +1016,7 @@ func normalize(dir string) string {
 
 func (glob *GhoulbertGlobal) GhoulbertForUrl(basedir string, url string, verbose uint, pretty bool) *Ghoulbert {
 	var input *os.File
-	var err os.Error
+	var err error
 	var fullpath string
 	var gh *Ghoulbert
 
@@ -1047,7 +1048,7 @@ func (glob *GhoulbertGlobal) GhoulbertForUrl(basedir string, url string, verbose
 		input, err = os.Open(fullpath)
 		if input == nil {
 			errMsg("Opening '%s' for reading failed (%s).\n",
-				fullpath, err.String())
+				fullpath, err.Error())
 			os.Exit(1)
 		}
 	}
@@ -1929,8 +1930,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 	copy(vars, gh.scratch_vars)
 
 	if defthm {
-		// Now remove the new dname from gh.terms
-		gh.terms[dname] = nil, false
+		delete (gh.terms, dname)
 	}
 
 	thm := new(Theorem)
