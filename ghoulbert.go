@@ -20,7 +20,7 @@
 // evolving.
 //
 // The defthm branch of Ghoulbert is based on mix of various versions of
-// the Ghilbert language, plus some changes unique to itself. 
+// the Ghilbert language, plus some changes unique to itself.
 //
 //   * Inference rules may have multiple conclusions as well as multiple
 //     hypotheses.
@@ -142,16 +142,16 @@
 // match (c:cs) [] = False
 // match (c:cs) (x:xs) == c == x && match cs xs
 //
-// Another mapping type is 
+// Another mapping type is
 //   (ptrans CLASS PAT RES)
 // As usual, this mapping passes (k, s) through unchanged unless s = CLASS.
 // PAT is a pattern as described above for the 'select' mapping type.
 // (k, CLASS) also passses through this mapping unchanged if k does not match
 // PAT in the sense explained above.
 //
-// RES is an atom that may contain special sequences "\0.", "\1.", "\2.", 
+// RES is an atom that may contain special sequences "\0.", "\1.", "\2.",
 // "\3.", ..., "\1001.", ...
-// (in general, "\" + n +".", where n is a decimal representation of a 
+// (in general, "\" + n +".", where n is a decimal representation of a
 // natural number).
 // A '\' character that would otherwise introduce one of these sequences
 // may be escaped as '\\'. However, an unescaped '\' character that is not
@@ -172,7 +172,7 @@
 // '*' characters are preferred.
 
 // We could get most of the needed functionality from a single mapping
-// type (PAT RES). In PAT or RES, in any maximal substring consisting of 
+// type (PAT RES). In PAT or RES, in any maximal substring consisting of
 // consecutive '$' characters (only), if the substring contains an odd
 // number (2*n + 1) of '$' characters, the first 2*n of them match n
 // literal '$' characters of the token being mapped, while the last '$'
@@ -1119,7 +1119,7 @@ func NewGhoulbert(glob *GhoulbertGlobal, basedir string, fullpath string) *Ghoul
 // assertion being imported is _equivalent_ in some appropriate sense
 // to the one already visible in A.
 
-// Or, we could simply say that if we try to import a (non-axiomatic) 
+// Or, we could simply say that if we try to import a (non-axiomatic)
 // assertion with a name that already exists in the importing context, we
 // just don't import that one -- ignore it, possibly logging a warning.
 // That would be simpler.
@@ -1130,7 +1130,7 @@ func NewGhoulbert(glob *GhoulbertGlobal, basedir string, fullpath string) *Ghoul
 
 // Of course, all Axioms of an imported context must be mapped to an equivalent
 // assertion (either axiomatic or already proven) in the importing context.
-// (Since Axioms from the imported context must be treated differently from 
+// (Since Axioms from the imported context must be treated differently from
 // proven theorems of the imported context, would it make sense to use a
 // separate mapping for them?)
 
@@ -1567,7 +1567,7 @@ func DefConcMatch(conc Expression, exp Expression, dterm *Term,
 	var j int
 
 	// cte is an occurrence of the definition term.
-	// Check that all of cte's arguments are variables, and that each 
+	// Check that all of cte's arguments are variables, and that each
 	// such variable occurs only once. Note, kind checking already occurred
 	// when the conclusion was parsed.
 
@@ -1987,7 +1987,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 			}
 			v := s.asVar()
 			if v != nil {
-				// A new proof dummy variable. Add it to varmap and 
+				// A new proof dummy variable. Add it to varmap and
 				// gh.scratch_vars.
 				iv := gh.AddVar(v, varmap)
 				pip.PushWild(iv)
@@ -2045,7 +2045,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		//    arguments must be proof dummies (i.e. must not occur in the
 		//    hypotheses or conclusions).  Such variables will correspond to
 		//    definition dummy variables.
-		// -- Each occurrence of the definition term must determine an 
+		// -- Each occurrence of the definition term must determine an
 		//    identical [Later: consistent? unifiable?] definiens, up to 1-1
 		//    consistent replacement of variables.
 		//[Not this:
@@ -2055,7 +2055,7 @@ func (gh *Ghoulbert) ThmCmd(l *List, defthm bool) int {
 		//    the remnant subexpression matching any other occurrence of the
 		//    definition term.
 		// because whether a term appears once or more than once in an
-		// expression is not invariant under logical (or even definitional) 
+		// expression is not invariant under logical (or even definitional)
 		// equivalence: consider
 		// (<-> (true) (-> ph ph)) vs. (/\ (-> (true) (-> ph ph))
 		//                                 (-> (-> ph ph) (true)))
@@ -2489,10 +2489,10 @@ func (ghi *GhImport) ImportTerms(tmap []PatRep) bool {
 			// We import such defined terms with opaquified definienses, since
 			// indirectly imported terms might otherwise look 'axiomatic'.
 			// [Note that the 'expr' member of a defined term is not really used
-			// after the defthm is proven, other than to mark the term as 
+			// after the defthm is proven, other than to mark the term as
 			// optional in imports. We might consider omitting it.]
 			// Note that the 1-1 check below prevents such an added
-			// term from being the target of a later-mapped 
+			// term from being the target of a later-mapped
 			// axiomatic term.
 			ak := make([]*Kind, len(t.argkinds))
 			for i, k := range t.argkinds {
